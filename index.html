@@ -1,0 +1,3410 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Clientes - Geolocalização</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" >
+
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" >
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        .dark {
+            --bg-primary: #1f2937;
+            --bg-secondary: #111827;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border: #374151;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary) 0%, #3b82f6 100%);
+            color: white;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .sidebar-header p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        /* Search Box */
+        .search-container {
+            padding: 15px;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            color: var(--text-secondary);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 40px 10px 38px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-primary);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .clear-search {
+            position: absolute;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+            display: none;
+            font-size: 18px;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .clear-search:hover {
+            color: var(--text-primary);
+        }
+
+        .clear-search.visible {
+            display: block;
+        }
+
+        .search-results-info {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .upload-section {
+            padding: 15px;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .upload-btn {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .upload-input {
+            display: none;
+        }
+
+        .upload-status {
+            margin-top: 8px;
+            font-size: 12px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .upload-status.success {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .clients-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .client-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .client-item:hover {
+            transform: translateX(5px);
+            border-color: var(--primary);
+        }
+
+        .client-item.hidden {
+            display: none;
+        }
+
+        .client-item.highlight {
+            border-color: var(--primary);
+            background: linear-gradient(90deg, var(--bg-secondary) 0%, rgba(37, 99, 235, 0.05) 100%);
+        }
+
+        .highlight-text {
+            background: rgba(37, 99, 235, 0.2);
+            padding: 1px 3px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .client-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .client-address {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .client-coords {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Map Container */
+        #map {
+            flex: 1;
+            height: 100vh;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--success);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 12px var(--shadow);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .fab:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 6px 20px var(--shadow);
+        }
+
+        .fab:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+
+        /* Mobile Menu Toggle */
+        .menu-toggle {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            border: none;
+            box-shadow: 0 2px 8px var(--shadow);
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+        }
+
+        .menu-toggle svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .camera-section {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .scan-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        .scan-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .camera-preview {
+            margin-top: 16px;
+            display: none;
+            position: relative;
+        }
+
+        .camera-preview.active {
+            display: block;
+        }
+
+        .camera-preview video,
+        .camera-preview canvas {
+            width: 100%;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+        }
+
+        .camera-preview canvas {
+            display: none;
+        }
+
+        .capture-btn {
+            margin-top: 12px;
+            width: 100%;
+            padding: 12px;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .processing-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+        }
+
+        .processing-overlay.active {
+            display: flex;
+        }
+
+        .processing-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .processing-text {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .coords-display {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        /* Leaflet Custom Styles */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+        }
+
+        /* Leaflet Routing Machine Customization */
+        .leaflet-routing-container {
+            display: none !important; /* Ocultar banner de navegação */
+        }
+
+        .leaflet-routing-container h2,
+        .leaflet-routing-container h3 {
+            color: var(--text-primary);
+        }
+
+        .leaflet-routing-alt {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .leaflet-routing-alt:hover {
+            background: var(--bg-primary);
+        }
+
+        .leaflet-routing-alt-minimized {
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+        }
+
+        .leaflet-routing-icon {
+            color: var(--text-primary);
+        }
+
+        .leaflet-routing-geocoders {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .leaflet-routing-geocoder input {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px;
+        }
+
+        .popup-navigate-btn {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+        }
+
+        .popup-navigate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Navigation Panel - Real-time GPS */
+        .navigation-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 24px var(--shadow);
+            z-index: 1500;
+            min-width: 300px;
+            display: none;
+            animation: slideInRight 0.3s;
+        }
+
+        .navigation-panel.active {
+            display: block;
+        }
+
+        .navigation-panel.collapsed .nav-stats {
+            display: none;
+        }
+
+        .navigation-panel.collapsed .nav-status {
+            display: none;
+        }
+
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .navigation-panel.collapsed .nav-header {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .nav-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 16px;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .nav-toggle-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .nav-toggle-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .nav-close-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .nav-close-btn:hover {
+            background: var(--danger-hover);
+        }
+
+        .nav-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .nav-stat {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .nav-stat-label {
+            color: var(--text-secondary);
+        }
+
+        .nav-stat-value {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .nav-status {
+            text-align: center;
+            padding: 8px;
+            background: var(--success);
+            color: white;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .nav-status.calculating {
+            background: #f59e0b;
+        }
+
+        .popup-content {
+            min-width: 200px;
+        }
+
+        .popup-content h3 {
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .popup-content p {
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .popup-buttons {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .popup-route-btn {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .popup-route-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .popup-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .popup-edit-btn,
+        .popup-delete-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .popup-edit-btn {
+            background: var(--primary);
+            color: white;
+        }
+
+        .popup-edit-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .popup-delete-btn {
+            background: var(--danger);
+            color: white;
+        }
+
+        .popup-delete-btn:hover {
+            background: var(--danger-hover);
+        }
+
+        /* Loading Indicator */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 3000;
+        }
+
+        .spinner {
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 4px 12px var(--shadow);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 400px;
+            animation: slideInRight 0.3s ease;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.hiding {
+            animation: slideOutRight 0.3s ease forwards;
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .toast-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+            color: var(--text-primary);
+        }
+
+        .toast-message {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .toast.warning {
+            border-left: 4px solid #f59e0b;
+        }
+
+        .toast.info {
+            border-left: 4px solid var(--primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: flex;
+            }
+
+            .fab {
+                bottom: 10px;
+                width: 56px;
+                height: 56px;
+            }
+
+            .toast {
+                left: 20px;
+                right: 20px;
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Obtendo sua localização...</p>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>📍 Meus Clientes</h1>
+                <p id="clientCount">0 clientes cadastrados</p>
+            </div>
+
+            <!-- Upload Planilha -->
+            <div class="upload-section">
+                <button class="upload-btn" id="uploadBtn" title="Upload planilha Excel com códigos BR e endereços">
+                    📊 Carregar Planilha Excel
+                </button>
+                <input type="file" id="uploadInput" class="upload-input" accept=".xlsx,.xls,.csv">
+                <div class="upload-status" id="uploadStatus"></div>
+
+                <button class="upload-btn" id="optimizeRouteBtn" style="margin-top: 8px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); display: none;" title="Roteirizar endereços da planilha com IA">
+                    🤖 Roteirizar com IA
+                </button>
+                <div class="upload-status" id="routeStatus"></div>
+            </div>
+
+            <!-- Search Box -->
+            <div class="search-container">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input
+                        type="text"
+                        class="search-input"
+                        id="searchInput"
+                        placeholder="Buscar por nome ou endereço..."
+                        autocomplete="off"
+                    >
+                    <button class="clear-search" id="clearSearch" title="Limpar busca">×</button>
+                </div>
+                <div class="search-results-info" id="searchResultsInfo"></div>
+            </div>
+
+            <div class="clients-list" id="clientsList">
+                <div class="empty-state">
+                    <svg fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+                    </svg>
+                    <p>Nenhum cliente cadastrado ainda</p>
+                    <p style="font-size: 12px; margin-top: 8px;">Use o botão + para adicionar</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map -->
+        <div id="map"></div>
+
+        <!-- Mobile Menu Toggle -->
+        <button class="menu-toggle" id="menuToggle">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+
+        <!-- Floating Action Button -->
+        <button class="fab" id="addClientBtn" title="Adicionar cliente aqui">+</button>
+
+        <!-- Navigation Panel - Real-time GPS -->
+        <div class="navigation-panel collapsed" id="navigationPanel">
+            <div class="nav-header">
+                <div class="nav-title">🧭 Navegação Ativa</div>
+                <div class="nav-buttons">
+                    <button class="nav-toggle-btn" id="navToggleBtn" onclick="toggleNavigationPanel()">Ver</button>
+                    <button class="nav-close-btn" onclick="stopRealtimeNavigation()">Parar</button>
+                </div>
+            </div>
+            <div class="nav-stats">
+                <div class="nav-stat">
+                    <span class="nav-stat-label">Destino:</span>
+                    <span class="nav-stat-value" id="navDestination">-</span>
+                </div>
+                <div class="nav-stat">
+                    <span class="nav-stat-label">Distância:</span>
+                    <span class="nav-stat-value" id="navDistance">-</span>
+                </div>
+                <div class="nav-stat">
+                    <span class="nav-stat-label">Tempo:</span>
+                    <span class="nav-stat-value" id="navTime">-</span>
+                </div>
+            </div>
+            <div class="nav-status" id="navStatus">🚗 Navegando...</div>
+        </div>
+    </div>
+
+    <!-- Add Client Modal -->
+    <div class="modal-overlay" id="addClientModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Adicionar Novo Cliente</h2>
+            </div>
+            <div class="modal-body">
+                <!-- QR Code Scanner Section -->
+                <div class="camera-section">
+                    <button type="button" class="scan-btn" id="scanBtn">
+                        📷 Escanear QR Code
+                    </button>
+                    <div class="camera-preview" id="cameraPreview">
+                        <video id="cameraVideo" autoplay playsinline></video>
+                        <canvas id="cameraCanvas"></canvas>
+                    </div>
+                </div>
+
+                <form id="clientForm">
+                    <div class="form-group">
+                        <label for="clientName">Nome do Cliente *</label>
+                        <input type="text" id="clientName" required placeholder="Digite o nome do cliente">
+                    </div>
+                    <div class="form-group">
+                        <label for="clientAddress">Endereço *</label>
+                        <textarea id="clientAddress" required placeholder="Digite o endereço completo"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="clientBR">BR</label>
+                        <input type="text" id="clientBR" placeholder="Informação do QR Code">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+                <button type="submit" form="clientForm" class="btn btn-primary">Salvar Cliente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Overlay -->
+    <div class="processing-overlay" id="processingOverlay">
+        <div class="processing-spinner"></div>
+        <div class="processing-text">Lendo QR Code...</div>
+    </div>
+
+    <!-- Edit Client Modal -->
+    <div class="modal-overlay" id="editClientModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Editar Cliente</h2>
+            </div>
+            <div class="modal-body">
+                <form id="editClientForm">
+                    <div class="form-group">
+                        <label for="editClientName">Nome do Cliente *</label>
+                        <input type="text" id="editClientName" required placeholder="Digite o nome do cliente">
+                    </div>
+                    <div class="form-group">
+                        <label for="editClientAddress">Endereço *</label>
+                        <textarea id="editClientAddress" required placeholder="Digite o endereço completo"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="editClientBR">BR</label>
+                        <input type="text" id="editClientBR" placeholder="Informação do QR Code">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="editCancelBtn">Cancelar</button>
+                <button type="submit" form="editClientForm" class="btn btn-primary">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- jsQR (QR Code Scanner) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+    <!-- SheetJS (Excel Reader) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <script>
+        // Toast Notification System
+        function showToast(message, type = 'info', title = '') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            const icons = {
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️',
+                success: '✓'
+            };
+
+            const titles = {
+                error: title || 'Erro',
+                warning: title || 'Aviso',
+                info: title || 'Informação',
+                success: title || 'Sucesso'
+            };
+
+            toast.innerHTML = `
+                <div class="toast-icon">${icons[type]}</div>
+                <div class="toast-content">
+                    <div class="toast-title">${titles[type]}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+            `;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    document.body.removeChild(toast);
+                }, 300);
+            }, 4000);
+        }
+
+        // Dark mode detection
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // Supabase Configuration
+        // IMPORTANTE: Substitua estas variáveis pelas suas credenciais do Supabase
+        const SUPABASE_URL = 'https://pnecrzwlyxjirdjfiman.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBuZWNyendseXhqaXJkamZpbWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyOTQ2NzksImV4cCI6MjA3OTg3MDY3OX0.2REOdgPBvGBZUrLT_ggUU6HqbunamouGaihjibH1jhs';
+
+        // Inicializar Supabase (será null se não configurado)
+        let supabase = null;
+        try {
+            if (SUPABASE_URL.includes('seu-projeto') || SUPABASE_ANON_KEY.includes('sua-chave')) {
+                console.warn('⚠️ Supabase não configurado. Usando armazenamento local.');
+            } else {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('✅ Supabase conectado com sucesso!');
+            }
+        } catch (error) {
+            console.error('Erro ao conectar com Supabase:', error);
+        }
+
+        // Application State
+        const state = {
+            map: null,
+            currentLocation: null,
+            currentLocationMarker: null,
+            clients: [],
+            clientMarkers: [],
+            nextId: 1,
+            searchQuery: '',
+            editingClientId: null,
+            useSupabase: supabase !== null,
+            brDatabase: {}, // Armazena mapeamento BR -> Endereço
+            routingControl: null, // Controle de navegação
+            navigationActive: false, // Navegação GPS em tempo real ativa
+            navigationWatchId: null, // ID do watchPosition
+            navigationDestination: null, // Destino da navegação
+            currentRoute: null, // Rota atual
+            viewingOptimizedRoute: false // Flag para indicar que está visualizando rota otimizada
+        };
+
+        // Icons
+        const currentLocationIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#2563eb">
+                    <circle cx="12" cy="12" r="8" fill="#3b82f6" stroke="white" stroke-width="2"/>
+                    <circle cx="12" cy="12" r="4" fill="white"/>
+                </svg>
+            `),
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        const clientIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ef4444">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+            `),
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+        });
+
+        // Initialize Map
+        async function initMap(lat, lng) {
+            // Detectar mobile
+            const isMobile = window.innerWidth <= 768;
+
+            // Usar Canvas Renderer para melhor performance (especialmente em mobile)
+            const renderer = L.canvas({ padding: 0.5 });
+
+            state.map = L.map('map', {
+                zoomControl: false,
+                preferCanvas: true,  // Força uso de Canvas ao invés de SVG
+                renderer: renderer,
+                // Otimizações para mobile
+                tap: true,
+                tapTolerance: 15,
+                bounceAtZoomLimits: false,
+                // Desabilitar animações em mobile
+                zoomAnimation: !isMobile,
+                fadeAnimation: !isMobile,
+                markerZoomAnimation: !isMobile
+            }).setView([lat, lng], 16);
+
+            // Add tile layer com otimizações
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19,
+                updateWhenIdle: true,  // Atualizar tiles apenas quando parar de mover
+                updateWhenZooming: false,  // Não atualizar durante zoom
+                keepBuffer: isMobile ? 1 : 2,  // Menos buffer em mobile
+                tileSize: isMobile ? 256 : 256,  // Tamanho padrão
+                detectRetina: false,  // Desabilitar retina em mobile (tiles menores)
+                // Tiles de menor qualidade em mobile para economizar banda/CPU
+                className: isMobile ? 'mobile-tiles' : ''
+            }).addTo(state.map);
+
+            // Add current location marker
+            state.currentLocationMarker = L.marker([lat, lng], {
+                icon: currentLocationIcon,
+                title: 'Sua localização atual'
+            }).addTo(state.map);
+
+            // Bind popup mas NÃO abrir automaticamente (para evitar interferência com visualização de rotas)
+            state.currentLocationMarker.bindPopup('<b>Você está aqui</b>');
+
+            // Load clients from Supabase
+            await loadClientsFromSupabase();
+
+            // Load BR database from Supabase
+            await loadBRDatabaseFromSupabase();
+
+            hideLoading();
+        }
+
+        // Get Current Location
+        async function getCurrentLocation() {
+            if ('geolocation' in navigator) {
+                // Verificar permissão antes de solicitar
+                if (navigator.permissions) {
+                    try {
+                        const permission = await navigator.permissions.query({ name: 'geolocation' });
+                        console.log('Permissão de geolocalização:', permission.state);
+                    } catch (error) {
+                        console.log('Não foi possível verificar permissão:', error);
+                    }
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        state.currentLocation = { lat, lng };
+                        initMap(lat, lng);
+
+                        // Watch position for updates (store ID to clear later if needed)
+                        const backgroundWatchId = navigator.geolocation.watchPosition(
+                            (pos) => {
+                                const newLat = pos.coords.latitude;
+                                const newLng = pos.coords.longitude;
+                                state.currentLocation = { lat: newLat, lng: newLng };
+
+                                if (state.currentLocationMarker) {
+                                    state.currentLocationMarker.setLatLng([newLat, newLng]);
+                                }
+                            },
+                            (error) => console.error('Error watching position:', error),
+                            { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
+                        );
+                        // Note: backgroundWatchId is not stored to state as it should run continuously
+                    },
+                    (error) => {
+                        console.error('Geolocation error:', error);
+
+                        let errorMessage = 'Não foi possível obter sua localização.';
+                        if (error.code === 1) {
+                            errorMessage = 'Permissão de localização negada. Por favor, permita o acesso à localização nas configurações do navegador.';
+                        }
+
+                        // Default to São Paulo, Brazil
+                        const defaultLat = -23.5505;
+                        const defaultLng = -46.6333;
+                        state.currentLocation = { lat: defaultLat, lng: defaultLng };
+                        initMap(defaultLat, defaultLng);
+                        showToast(errorMessage, 'warning');
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+                );
+            } else {
+                showToast('Geolocalização não é suportada pelo seu navegador.', 'error');
+                const defaultLat = -23.5505;
+                const defaultLng = -46.6333;
+                state.currentLocation = { lat: defaultLat, lng: defaultLng };
+                initMap(defaultLat, defaultLng);
+            }
+        }
+
+        // Show/Hide Loading
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Load BR Database from Supabase
+        async function loadBRDatabaseFromSupabase() {
+            if (!state.useSupabase) return;
+
+            try {
+                const { data, error } = await supabase
+                    .from('br_addresses')
+                    .select('*');
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    state.brDatabase = {};
+                    data.forEach(item => {
+                        state.brDatabase[item.br_code] = item.address;
+                    });
+                    console.log(`✅ ${data.length} código(s) BR carregado(s) do Supabase`);
+
+                    const uploadStatus = document.getElementById('uploadStatus');
+                    uploadStatus.textContent = `✓ ${data.length} códigos BR carregados!`;
+                    uploadStatus.className = 'upload-status success';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar banco de dados BR:', error);
+                // Não mostra toast, pois pode ser que a tabela ainda não exista
+            }
+        }
+
+        // Save BR Database to Supabase
+        async function saveBRDatabaseToSupabase(brDatabase) {
+            if (!state.useSupabase) return;
+
+            try {
+                // Limpar dados antigos
+                const { error: deleteError } = await supabase
+                    .from('br_addresses')
+                    .delete()
+                    .neq('br_code', ''); // Deleta todos os registros
+
+                if (deleteError) throw deleteError;
+
+                // Inserir novos dados
+                const records = Object.entries(brDatabase).map(([br_code, address]) => ({
+                    br_code,
+                    address
+                }));
+
+                if (records.length > 0) {
+                    const { error: insertError } = await supabase
+                        .from('br_addresses')
+                        .insert(records);
+
+                    if (insertError) throw insertError;
+
+                    console.log(`✅ ${records.length} código(s) BR salvos no Supabase`);
+                }
+            } catch (error) {
+                console.error('Erro ao salvar banco de dados BR:', error);
+                showToast('Erro ao salvar códigos BR no banco de dados', 'error');
+            }
+        }
+
+        // Load Clients from Supabase
+        async function loadClientsFromSupabase() {
+            if (!state.useSupabase) return;
+
+            try {
+                const { data, error } = await supabase
+                    .from('clients')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    // Clear existing clients
+                    state.clients = [];
+                    state.clientMarkers.forEach(m => state.map.removeLayer(m.marker));
+                    state.clientMarkers = [];
+
+                    // Add clients from database
+                    data.forEach(client => {
+                        const clientObj = {
+                            id: client.id,
+                            name: client.name,
+                            address: client.address,
+                            lat: client.latitude,
+                            lng: client.longitude,
+                            br: client.br || '',
+                            date: client.created_at
+                        };
+                        state.clients.push(clientObj);
+                        addClientMarker(clientObj);
+                    });
+
+                    updateClientsList();
+                    console.log(`✅ ${data.length} cliente(s) carregado(s) do Supabase`);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar clientes:', error);
+                showToast('Erro ao carregar clientes do banco de dados', 'error');
+            }
+        }
+
+        // Add Client
+        async function addClient(name, address, lat, lng, br = '') {
+            const client = {
+                name,
+                address,
+                lat,
+                lng,
+                br,
+                date: new Date().toISOString()
+            };
+
+            if (state.useSupabase) {
+                try {
+                    const { data, error } = await supabase
+                        .from('clients')
+                        .insert([
+                            {
+                                name: client.name,
+                                address: client.address,
+                                latitude: client.lat,
+                                longitude: client.lng,
+                                br: client.br
+                            }
+                        ])
+                        .select();
+
+                    if (error) throw error;
+
+                    // Use the ID from database
+                    client.id = data[0].id;
+                    client.date = data[0].created_at;
+                    client.br = data[0].br || '';
+
+                    console.log('✅ Cliente salvo no Supabase');
+                } catch (error) {
+                    console.error('Erro ao salvar cliente:', error);
+                    showToast('Erro ao salvar cliente no banco de dados', 'error');
+                    return null;
+                }
+            } else {
+                // Fallback to local storage
+                client.id = state.nextId++;
+            }
+
+            state.clients.push(client);
+            addClientMarker(client);
+            updateClientsList();
+            return client;
+        }
+
+        // Add Client Marker
+        function addClientMarker(client) {
+            const marker = L.marker([client.lat, client.lng], {
+                icon: clientIcon,
+                title: client.name
+            }).addTo(state.map);
+
+            updateMarkerPopup(client, marker);
+            state.clientMarkers.push({ id: client.id, marker });
+        }
+
+        // Calculate Distance between two points (Haversine formula)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Raio da Terra em km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; // Distância em km
+        }
+
+        // Update Navigation Stats
+        function updateNavigationStats() {
+            if (!state.navigationActive || !state.currentLocation || !state.navigationDestination) return;
+
+            const distance = calculateDistance(
+                state.currentLocation.lat,
+                state.currentLocation.lng,
+                state.navigationDestination.lat,
+                state.navigationDestination.lng
+            );
+
+            // Atualizar painel
+            document.getElementById('navDistance').textContent =
+                distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(2)} km`;
+
+            // Estimativa de tempo (assumindo 40 km/h de média)
+            const estimatedTime = Math.round((distance / 40) * 60);
+            document.getElementById('navTime').textContent =
+                estimatedTime < 1 ? '< 1 min' : `${estimatedTime} min`;
+
+            // Verificar se chegou ao destino (menos de 50 metros)
+            if (distance < 0.05) {
+                showToast('🎉 Você chegou ao destino!', 'success');
+                stopRealtimeNavigation();
+            }
+        }
+
+        // Start GPS Tracking for real-time navigation
+        function startGPSTracking() {
+            if (!('geolocation' in navigator)) {
+                showToast('Geolocalização não suportada', 'error');
+                return;
+            }
+
+            let lastLat = null;
+            let lastLng = null;
+
+            // Rastrear posição continuamente
+            state.navigationWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    const newLat = position.coords.latitude;
+                    const newLng = position.coords.longitude;
+                    const heading = position.coords.heading; // Direção do movimento (0-360 graus)
+                    const speed = position.coords.speed; // Velocidade em m/s
+
+                    console.log('📍 Posição atualizada:', {
+                        lat: newLat,
+                        lng: newLng,
+                        heading: heading,
+                        speed: speed
+                    });
+
+                    // Atualizar posição atual
+                    state.currentLocation = { lat: newLat, lng: newLng };
+
+                    // Atualizar marcador de posição no mapa
+                    if (state.currentLocationMarker) {
+                        state.currentLocationMarker.setLatLng([newLat, newLng]);
+                    }
+
+                    // Calcular direção baseado na posição anterior se heading não estiver disponível
+                    let bearing = heading;
+                    if (bearing === null && lastLat !== null && lastLng !== null) {
+                        // Calcular bearing entre dois pontos
+                        const dLon = (newLng - lastLng) * Math.PI / 180;
+                        const lat1 = lastLat * Math.PI / 180;
+                        const lat2 = newLat * Math.PI / 180;
+                        const y = Math.sin(dLon) * Math.cos(lat2);
+                        const x = Math.cos(lat1) * Math.sin(lat2) -
+                                Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                        bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                    }
+
+                    // ROTAÇÃO DO MAPA baseado na direção do movimento
+                    // Nota: setBearing() requer plugin Leaflet.Rotate - comentado por enquanto
+                    if (bearing !== null && !isNaN(bearing)) {
+                        // state.map.setBearing(bearing);
+                        console.log('🧭 Direção calculada:', bearing.toFixed(1) + '°');
+                    }
+
+                    // Calcular distância até o destino
+                    const distanceToDestination = calculateDistance(
+                        newLat, newLng,
+                        state.navigationDestination.lat, state.navigationDestination.lng
+                    );
+
+                    // ZOOM DINÂMICO baseado na distância (APENAS durante navegação ativa E não visualizando rota otimizada)
+                    if (state.navigationActive && !state.viewingOptimizedRoute) {
+                        let targetZoom = 16; // Zoom padrão
+                        if (distanceToDestination < 0.1) { // Menos de 100m
+                            targetZoom = 19; // Zoom alto (próximo)
+                        } else if (distanceToDestination < 0.5) { // Menos de 500m
+                            targetZoom = 18;
+                        } else if (distanceToDestination < 1) { // Menos de 1km
+                            targetZoom = 17;
+                        } else if (distanceToDestination < 5) { // Menos de 5km
+                            targetZoom = 16;
+                        } else {
+                            targetZoom = 14; // Zoom médio (longe)
+                        }
+
+                        // Aplicar zoom suave
+                        if (Math.abs(state.map.getZoom() - targetZoom) > 0.5) {
+                            state.map.setZoom(targetZoom, {
+                                animate: true
+                            });
+                            console.log(`🔍 Zoom ajustado para ${targetZoom} (distância: ${distanceToDestination.toFixed(2)} km)`);
+                        }
+                    }
+
+                    // Centralizar mapa na posição atual APENAS se navegação estiver ativa E não visualizando rota otimizada
+                    if (state.navigationActive && !state.viewingOptimizedRoute) {
+                        state.map.panTo([newLat, newLng], {
+                            animate: true,
+                            duration: 1
+                        });
+                    }
+
+                    // Atualizar estatísticas de navegação
+                    updateNavigationStats();
+
+                    // Recalcular rota se necessário
+                    if (state.routingControl && state.navigationDestination) {
+                        const waypoints = state.routingControl.getWaypoints();
+                        waypoints[0].latLng = L.latLng(newLat, newLng);
+                        state.routingControl.setWaypoints(waypoints);
+                    }
+
+                    // Armazenar posição atual para próxima iteração
+                    lastLat = newLat;
+                    lastLng = newLng;
+                },
+                (error) => {
+                    console.error('Erro no rastreamento GPS:', error);
+                    showToast('Erro ao rastrear localização', 'warning');
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 1000, // Atualização mais frequente para rotação suave
+                    timeout: 10000
+                }
+            );
+
+            console.log('✅ Rastreamento GPS iniciado com rotação e zoom automático');
+        }
+
+        // Toggle Navigation Panel
+        window.toggleNavigationPanel = function() {
+            const navPanel = document.getElementById('navigationPanel');
+            const toggleBtn = document.getElementById('navToggleBtn');
+
+            if (navPanel.classList.contains('collapsed')) {
+                navPanel.classList.remove('collapsed');
+                toggleBtn.textContent = 'Ocultar';
+            } else {
+                navPanel.classList.add('collapsed');
+                toggleBtn.textContent = 'Ver';
+            }
+        };
+
+        // Stop Realtime Navigation
+        window.stopRealtimeNavigation = function() {
+            state.navigationActive = false;
+
+            // Parar rastreamento GPS
+            if (state.navigationWatchId) {
+                navigator.geolocation.clearWatch(state.navigationWatchId);
+                state.navigationWatchId = null;
+            }
+
+            // Remover rota
+            if (state.routingControl) {
+                state.map.removeControl(state.routingControl);
+                state.routingControl = null;
+            }
+
+            // NÃO resetar zoom aqui - deixar o mapa onde está
+            // (o zoom será ajustado por quem chamou esta função, se necessário)
+
+            // Ocultar painel
+            const navPanel = document.getElementById('navigationPanel');
+            if (navPanel) {
+                navPanel.classList.remove('active');
+            }
+
+            state.navigationDestination = null;
+            state.currentRoute = null;
+        };
+
+        // Start Navigation with Real-time GPS
+        window.startNavigation = function(clientId) {
+            const client = state.clients.find(c => c.id === clientId);
+            if (!client || !state.currentLocation) return;
+
+            // Parar navegação anterior se houver
+            if (state.navigationActive) {
+                stopRealtimeNavigation();
+            }
+
+            // Desabilitar modo de visualização de rota otimizada
+            state.viewingOptimizedRoute = false;
+
+            // Fechar todos os popups
+            state.map.closePopup();
+
+            // Configurar nova navegação
+            state.navigationActive = true;
+            state.navigationDestination = {
+                lat: client.lat,
+                lng: client.lng,
+                name: client.name
+            };
+
+            // Mostrar painel de navegação
+            document.getElementById('navigationPanel').classList.add('active');
+            document.getElementById('navDestination').textContent = client.name;
+            document.getElementById('navStatus').textContent = '📡 Calculando rota...';
+            document.getElementById('navStatus').className = 'nav-status calculating';
+
+            console.log('🧭 Iniciando navegação em tempo real:', {
+                origem: `${state.currentLocation.lat}, ${state.currentLocation.lng}`,
+                destino: `${client.lat}, ${client.lng}`,
+                cliente: client.name
+            });
+
+            try {
+                // Criar controle de roteamento
+                state.routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(state.currentLocation.lat, state.currentLocation.lng),
+                        L.latLng(client.lat, client.lng)
+                    ],
+                    routeWhileDragging: false,
+                    showAlternatives: false,
+                    addWaypoints: false,
+                    fitSelectedRoutes: true,
+                    lineOptions: {
+                        styles: [
+                            {color: '#2563eb', opacity: 0.8, weight: 6}
+                        ],
+                        extendToWaypoints: true,
+                        missingRouteTolerance: 0
+                    },
+                    createMarker: function() { return null; }, // Não criar marcadores extras
+                    router: L.Routing.osrmv1({
+                        serviceUrl: 'https://router.project-osrm.org/route/v1',
+                        profile: 'driving', // ou 'car', 'bike', 'foot'
+                        timeout: 30000 // 30 segundos timeout
+                    }),
+                    formatter: new L.Routing.Formatter({
+                        language: 'pt',
+                        units: 'metric',
+                        unitNames: {
+                            meters: 'm',
+                            kilometers: 'km',
+                            yards: 'yd',
+                            miles: 'mi',
+                            hours: 'h',
+                            minutes: 'min',
+                            seconds: 's'
+                        }
+                    })
+                }).addTo(state.map);
+
+                // Evento quando a rota é calculada
+                state.routingControl.on('routesfound', function(e) {
+                    console.log('✅ Rota encontrada:', e.routes);
+                    const routes = e.routes;
+                    state.currentRoute = routes[0];
+                    const summary = routes[0].summary;
+                    const distance = (summary.totalDistance / 1000).toFixed(2);
+                    const time = Math.round(summary.totalTime / 60);
+
+                    // Atualizar painel com dados da rota
+                    document.getElementById('navDistance').textContent = `${distance} km`;
+                    document.getElementById('navTime').textContent = `${time} min`;
+                    document.getElementById('navStatus').textContent = '🚗 Navegando...';
+                    document.getElementById('navStatus').className = 'nav-status';
+
+                    // ZOOM INICIAL mais próximo baseado na distância
+                    let initialZoom = 19; // Zoom muito alto por padrão
+                    const distKm = parseFloat(distance);
+                    if (distKm < 0.5) { // Menos de 500m
+                        initialZoom = 19;
+                    } else if (distKm < 2) { // Menos de 2km
+                        initialZoom = 18;
+                    } else if (distKm < 5) { // Menos de 5km
+                        initialZoom = 17;
+                    } else if (distKm < 10) { // Menos de 10km
+                        initialZoom = 16;
+                    } else {
+                        initialZoom = 15;
+                    }
+
+                    // Aplicar zoom inicial
+                    state.map.setZoom(initialZoom);
+                    console.log(`🔍 Zoom inicial definido para ${initialZoom} (distância: ${distance} km)`);
+
+                    // Centralizar no ponto inicial (sua localização)
+                    state.map.setView([state.currentLocation.lat, state.currentLocation.lng], initialZoom, {
+                        animate: true,
+                        duration: 0.5
+                    });
+
+                    // Iniciar rastreamento GPS em tempo real
+                    startGPSTracking();
+
+                    // Fechar sidebar em mobile
+                    if (window.innerWidth <= 768) {
+                        document.getElementById('sidebar').classList.remove('open');
+                    }
+                });
+
+                state.routingControl.on('routingerror', function(e) {
+                    console.error('❌ Erro detalhado ao calcular rota:', e);
+
+                    let errorMsg = 'Não foi possível calcular a rota.';
+
+                    if (e.error && e.error.status) {
+                        if (e.error.status === 429) {
+                            errorMsg = 'Muitas requisições. Aguarde alguns segundos e tente novamente.';
+                        } else if (e.error.status === 0) {
+                            errorMsg = 'Sem conexão com o servidor de rotas. Verifique sua internet.';
+                        } else {
+                            errorMsg = `Erro ${e.error.status}: ${e.error.message || 'Erro desconhecido'}`;
+                        }
+                    }
+
+                    showToast(errorMsg, 'error');
+
+                    // Remover controle com erro
+                    if (state.routingControl) {
+                        state.map.removeControl(state.routingControl);
+                        state.routingControl = null;
+                    }
+                });
+
+            } catch (error) {
+                console.error('❌ Erro ao criar roteamento:', error);
+                showToast('Erro ao iniciar navegação: ' + error.message, 'error');
+            }
+        };
+
+        // Start Navigation to a Stop (from optimized route)
+        window.startNavigationToStop = function(lat, lng, address, stopNumber) {
+            if (!state.currentLocation) {
+                showToast('Localização atual não disponível', 'error');
+                return;
+            }
+
+            // Parar navegação anterior se houver
+            if (state.navigationActive) {
+                stopRealtimeNavigation();
+            }
+
+            // Desabilitar modo de visualização de rota otimizada
+            state.viewingOptimizedRoute = false;
+
+            // Fechar todos os popups
+            state.map.closePopup();
+
+            // Configurar nova navegação
+            state.navigationActive = true;
+            state.navigationDestination = {
+                lat: lat,
+                lng: lng,
+                name: `Parada ${stopNumber}: ${address}`
+            };
+
+            // Mostrar painel de navegação
+            document.getElementById('navigationPanel').classList.add('active');
+            document.getElementById('navDestination').textContent = `Parada ${stopNumber}`;
+            document.getElementById('navStatus').textContent = '📡 Calculando rota...';
+            document.getElementById('navStatus').className = 'nav-status calculating';
+
+            console.log('🧭 Iniciando navegação para parada:', {
+                origem: `${state.currentLocation.lat}, ${state.currentLocation.lng}`,
+                destino: `${lat}, ${lng}`,
+                parada: stopNumber,
+                endereco: address
+            });
+
+            try {
+                // Criar controle de roteamento
+                state.routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(state.currentLocation.lat, state.currentLocation.lng),
+                        L.latLng(lat, lng)
+                    ],
+                    routeWhileDragging: false,
+                    showAlternatives: false,
+                    addWaypoints: false,
+                    fitSelectedRoutes: true,
+                    lineOptions: {
+                        styles: [
+                            {color: '#2563eb', opacity: 0.8, weight: 6}
+                        ],
+                        extendToWaypoints: true,
+                        missingRouteTolerance: 0
+                    },
+                    createMarker: function() { return null; },
+                    router: L.Routing.osrmv1({
+                        serviceUrl: 'https://router.project-osrm.org/route/v1',
+                        profile: 'driving',
+                        timeout: 30000
+                    }),
+                    formatter: new L.Routing.Formatter({
+                        language: 'pt',
+                        units: 'metric',
+                        unitNames: {
+                            meters: 'm',
+                            kilometers: 'km',
+                            yards: 'yd',
+                            miles: 'mi',
+                            hours: 'h',
+                            minutes: 'min',
+                            seconds: 's'
+                        }
+                    })
+                }).addTo(state.map);
+
+                // Evento quando a rota é calculada
+                state.routingControl.on('routesfound', function(e) {
+                    console.log('✅ Rota encontrada:', e.routes);
+                    const routes = e.routes;
+                    state.currentRoute = routes[0];
+                    const summary = routes[0].summary;
+                    const distance = (summary.totalDistance / 1000).toFixed(2);
+                    const time = Math.round(summary.totalTime / 60);
+
+                    // Atualizar painel com dados da rota
+                    document.getElementById('navDistance').textContent = `${distance} km`;
+                    document.getElementById('navTime').textContent = `${time} min`;
+                    document.getElementById('navStatus').textContent = '🚗 Navegando...';
+                    document.getElementById('navStatus').className = 'nav-status';
+
+                    // ZOOM INICIAL mais próximo baseado na distância
+                    let initialZoom = 19;
+                    const distKm = parseFloat(distance);
+                    if (distKm < 0.5) {
+                        initialZoom = 19;
+                    } else if (distKm < 2) {
+                        initialZoom = 18;
+                    } else if (distKm < 5) {
+                        initialZoom = 17;
+                    } else if (distKm < 10) {
+                        initialZoom = 16;
+                    } else {
+                        initialZoom = 15;
+                    }
+
+                    // Aplicar zoom inicial
+                    state.map.setZoom(initialZoom);
+                    console.log(`🔍 Zoom inicial definido para ${initialZoom} (distância: ${distance} km)`);
+
+                    // Centralizar no ponto inicial (sua localização)
+                    state.map.setView([state.currentLocation.lat, state.currentLocation.lng], initialZoom, {
+                        animate: true,
+                        duration: 0.5
+                    });
+
+                    // Iniciar rastreamento GPS em tempo real
+                    startGPSTracking();
+
+                    // Fechar sidebar em mobile
+                    if (window.innerWidth <= 768) {
+                        document.getElementById('sidebar').classList.remove('open');
+                    }
+                });
+
+                state.routingControl.on('routingerror', function(e) {
+                    console.error('❌ Erro detalhado ao calcular rota:', e);
+
+                    let errorMsg = 'Não foi possível calcular a rota.';
+
+                    if (e.error && e.error.status) {
+                        if (e.error.status === 400) {
+                            errorMsg = 'Coordenadas inválidas. Verifique o endereço.';
+                        } else if (e.error.status === 404) {
+                            errorMsg = 'Não foi possível encontrar uma rota entre os pontos.';
+                        } else if (e.error.status >= 500) {
+                            errorMsg = 'Erro no servidor de rotas. Tente novamente.';
+                        }
+                    }
+
+                    document.getElementById('navStatus').textContent = '❌ ' + errorMsg;
+                    document.getElementById('navStatus').className = 'nav-status error';
+                    showToast(errorMsg, 'error');
+
+                    // Remover controle de roteamento em caso de erro
+                    if (state.routingControl) {
+                        state.map.removeControl(state.routingControl);
+                        state.routingControl = null;
+                    }
+                    state.navigationActive = false;
+                });
+
+            } catch (error) {
+                console.error('❌ Erro ao criar roteamento:', error);
+                showToast('Erro ao iniciar navegação: ' + error.message, 'error');
+            }
+        };
+
+        // Update Marker Popup
+        function updateMarkerPopup(client, marker) {
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${client.lat},${client.lng}`;
+
+            const popupContent = `
+                <div class="popup-content">
+                    <h3>${client.name}</h3>
+                    <p><strong>Endereço:</strong><br>${client.address}</p>
+                    <div class="popup-buttons">
+                        <button class="popup-navigate-btn" onclick="startNavigation(${client.id})">
+                            🧭 Navegar pelo Mapa
+                        </button>
+                        <a href="${googleMapsUrl}" target="_blank" class="popup-route-btn">
+                            🗺️ Abrir no Google Maps
+                        </a>
+                        <div class="popup-actions">
+                            <button class="popup-edit-btn" onclick="openEditModal(${client.id})">
+                                ✏️ Editar
+                            </button>
+                            <button class="popup-delete-btn" onclick="deleteClient(${client.id})">
+                                🗑️ Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            marker.bindPopup(popupContent);
+        }
+
+        // Edit Client
+        window.openEditModal = function(clientId) {
+            const client = state.clients.find(c => c.id === clientId);
+            if (!client) return;
+
+            state.editingClientId = clientId;
+
+            // Populate form
+            document.getElementById('editClientName').value = client.name;
+            document.getElementById('editClientAddress').value = client.address;
+            document.getElementById('editClientBR').value = client.br || '';
+
+            // Show modal
+            document.getElementById('editClientModal').classList.add('active');
+            document.getElementById('editClientName').focus();
+        };
+
+        // Update Client
+        async function updateClient(clientId, newName, newAddress, newBR) {
+            const client = state.clients.find(c => c.id === clientId);
+            if (!client) return;
+
+            if (state.useSupabase) {
+                try {
+                    const { error } = await supabase
+                        .from('clients')
+                        .update({
+                            name: newName,
+                            address: newAddress,
+                            br: newBR
+                        })
+                        .eq('id', clientId);
+
+                    if (error) throw error;
+
+                    console.log('✅ Cliente atualizado no Supabase');
+                } catch (error) {
+                    console.error('Erro ao atualizar cliente:', error);
+                    showToast('Erro ao atualizar cliente no banco de dados', 'error');
+                    return;
+                }
+            }
+
+            // Update client data
+            client.name = newName;
+            client.address = newAddress;
+            client.br = newBR;
+
+            // Update marker
+            const markerObj = state.clientMarkers.find(m => m.id === clientId);
+            if (markerObj) {
+                markerObj.marker.options.title = newName;
+                updateMarkerPopup(client, markerObj.marker);
+            }
+
+            // Update list
+            updateClientsList();
+        }
+
+        // Delete Client
+        window.deleteClient = async function(clientId) {
+            if (state.useSupabase) {
+                try {
+                    const { error } = await supabase
+                        .from('clients')
+                        .delete()
+                        .eq('id', clientId);
+
+                    if (error) throw error;
+
+                    console.log('✅ Cliente excluído do Supabase');
+                } catch (error) {
+                    console.error('Erro ao excluir cliente:', error);
+                    showToast('Erro ao excluir cliente do banco de dados', 'error');
+                    return;
+                }
+            }
+
+            // Remove from array
+            state.clients = state.clients.filter(c => c.id !== clientId);
+
+            // Remove marker
+            const markerObj = state.clientMarkers.find(m => m.id === clientId);
+            if (markerObj) {
+                state.map.removeLayer(markerObj.marker);
+                state.clientMarkers = state.clientMarkers.filter(m => m.id !== clientId);
+            }
+
+            updateClientsList();
+            showToast('Cliente excluído com sucesso!', 'success');
+        };
+
+        // Highlight search term in text
+        function highlightText(text, query) {
+            if (!query) return text;
+
+            const regex = new RegExp(`(${query})`, 'gi');
+            return text.replace(regex, '<span class="highlight-text">$1</span>');
+        }
+
+        // Update Clients List
+        function updateClientsList() {
+            const listContainer = document.getElementById('clientsList');
+            const countElement = document.getElementById('clientCount');
+            const searchResultsInfo = document.getElementById('searchResultsInfo');
+
+            countElement.textContent = `${state.clients.length} cliente${state.clients.length !== 1 ? 's' : ''} cadastrado${state.clients.length !== 1 ? 's' : ''}`;
+
+            if (state.clients.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+                        </svg>
+                        <p>Nenhum cliente cadastrado ainda</p>
+                        <p style="font-size: 12px; margin-top: 8px;">Use o botão + para adicionar</p>
+                    </div>
+                `;
+                searchResultsInfo.textContent = '';
+                return;
+            }
+
+            // Filter clients based on search query
+            const query = state.searchQuery.toLowerCase().trim();
+            const filteredClients = state.clients.filter(client => {
+                if (!query) return true;
+
+                const nameMatch = client.name.toLowerCase().includes(query);
+                const addressMatch = client.address.toLowerCase().includes(query);
+
+                return nameMatch || addressMatch;
+            });
+
+            // Update search results info
+            if (query) {
+                if (filteredClients.length === 0) {
+                    searchResultsInfo.textContent = 'Nenhum resultado encontrado';
+                } else if (filteredClients.length === 1) {
+                    searchResultsInfo.textContent = '1 cliente encontrado';
+                } else {
+                    searchResultsInfo.textContent = `${filteredClients.length} clientes encontrados`;
+                }
+            } else {
+                searchResultsInfo.textContent = '';
+            }
+
+            if (filteredClients.length === 0 && query) {
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+                        </svg>
+                        <p>Nenhum cliente encontrado</p>
+                        <p style="font-size: 12px; margin-top: 8px;">Tente outro termo de busca</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listContainer.innerHTML = filteredClients.map(client => {
+                const highlightedName = highlightText(client.name, query);
+                const highlightedAddress = highlightText(client.address, query);
+                const isHighlight = query ? 'highlight' : '';
+
+                return `
+                    <div class="client-item ${isHighlight}" onclick="focusClient(${client.id})">
+                        <div class="client-name">📍 ${highlightedName}</div>
+                        <div class="client-address">${highlightedAddress}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Focus on Client
+        window.focusClient = function(clientId) {
+            const client = state.clients.find(c => c.id === clientId);
+            if (client) {
+                state.map.setView([client.lat, client.lng], 18);
+
+                const markerObj = state.clientMarkers.find(m => m.id === clientId);
+                if (markerObj) {
+                    markerObj.marker.openPopup();
+                }
+
+                // Close sidebar on mobile
+                if (window.innerWidth <= 768) {
+                    document.getElementById('sidebar').classList.remove('open');
+                }
+            }
+        };
+
+        // QR Code Scanner Controls - OTIMIZADO
+        const scanBtn = document.getElementById('scanBtn');
+        const cameraPreview = document.getElementById('cameraPreview');
+        const cameraVideo = document.getElementById('cameraVideo');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const processingOverlay = document.getElementById('processingOverlay');
+        let cameraStream = null;
+        let qrScanActive = false;
+        let canvasContext = null;
+
+        // Open/Close QR Scanner
+        scanBtn.addEventListener('click', async () => {
+            if (cameraStream) {
+                // Close camera
+                qrScanActive = false;
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+                cameraPreview.classList.remove('active');
+                scanBtn.textContent = '📷 Escanear QR Code';
+                scanBtn.style.background = '';
+            } else {
+                // Open camera with optimized settings
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+                    cameraVideo.srcObject = cameraStream;
+                    cameraPreview.classList.add('active');
+                    scanBtn.textContent = '✖ Fechar Câmera';
+                    scanBtn.style.background = '#ef4444';
+
+                    // Initialize canvas context once
+                    if (!canvasContext) {
+                        canvasContext = cameraCanvas.getContext('2d', { willReadFrequently: true });
+                    }
+
+                    // Start optimized QR scanning
+                    qrScanActive = true;
+                    requestAnimationFrame(scanQRCode);
+                } catch (error) {
+                    console.error('Erro ao acessar câmera:', error);
+                    showToast('Não foi possível acessar a câmera. Verifique as permissões.', 'error');
+                }
+            }
+        });
+
+        // ULTRA-FAST QR Code scanning with multi-scale detection
+        function scanQRCode() {
+            if (!qrScanActive || cameraVideo.readyState !== cameraVideo.HAVE_ENOUGH_DATA) {
+                if (qrScanActive) requestAnimationFrame(scanQRCode);
+                return;
+            }
+
+            const videoWidth = cameraVideo.videoWidth;
+            const videoHeight = cameraVideo.videoHeight;
+
+            // Try multiple scales for better detection (especially with low-quality QR codes)
+            const scales = [0.6, 0.4]; // Try 60% then 40% if not found
+
+            for (const scale of scales) {
+                const width = Math.floor(videoWidth * scale);
+                const height = Math.floor(videoHeight * scale);
+
+                // Resize canvas only if needed
+                if (cameraCanvas.width !== width || cameraCanvas.height !== height) {
+                    cameraCanvas.width = width;
+                    cameraCanvas.height = height;
+                }
+
+                // Apply image enhancements for better detection
+                canvasContext.save();
+                canvasContext.filter = 'contrast(1.2) brightness(1.1)';
+                canvasContext.drawImage(cameraVideo, 0, 0, width, height);
+                canvasContext.restore();
+
+                // Get image data
+                const imageData = canvasContext.getImageData(0, 0, width, height);
+
+                // Scan with aggressive inversion attempts for damaged QR codes
+                const code = jsQR(imageData.data, width, height, {
+                    inversionAttempts: "attemptBoth" // Try both normal and inverted for damaged codes
+                });
+
+                if (code) {
+                    console.log('✅ QR Code detectado:', code.data);
+
+                    // Strong visual feedback
+                    cameraVideo.style.filter = 'brightness(1.5)';
+                    setTimeout(() => { cameraVideo.style.filter = ''; }, 150);
+
+                    // Vibrate
+                    if ('vibrate' in navigator) {
+                        navigator.vibrate([50, 30, 50]); // Double vibration pattern
+                    }
+
+                    // Fill BR field
+                    document.getElementById('clientBR').value = code.data;
+
+                    // Buscar endereço na planilha automaticamente
+                    const brCode = code.data.trim();
+                    if (state.brDatabase[brCode]) {
+                        document.getElementById('clientAddress').value = state.brDatabase[brCode];
+                        showToast('✓ QR Code lido! Endereço preenchido automaticamente.', 'success');
+                    } else {
+                        showToast('✓ QR Code lido! Endereço não encontrado na planilha.', 'warning');
+                    }
+
+                    // Close camera
+                    qrScanActive = false;
+                    if (cameraStream) {
+                        cameraStream.getTracks().forEach(track => track.stop());
+                        cameraStream = null;
+                    }
+                    cameraPreview.classList.remove('active');
+                    scanBtn.textContent = '📷 Escanear QR Code';
+                    scanBtn.style.background = '';
+                    return;
+                }
+            }
+
+            // Continue scanning immediately for maximum speed
+            requestAnimationFrame(scanQRCode);
+        }
+
+        // Add Client Modal Controls
+        const addModal = document.getElementById('addClientModal');
+        const addClientBtn = document.getElementById('addClientBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const clientForm = document.getElementById('clientForm');
+
+        addClientBtn.addEventListener('click', () => {
+            if (!state.currentLocation) {
+                showToast('Aguardando localização...', 'warning');
+                return;
+            }
+
+            addModal.classList.add('active');
+            document.getElementById('clientName').focus();
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            // Fechar câmera se estiver aberta
+            qrScanActive = false;
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraPreview.classList.remove('active');
+            scanBtn.textContent = '📷 Escanear QR Code';
+            scanBtn.style.background = '';
+
+            addModal.classList.remove('active');
+            clientForm.reset();
+        });
+
+        addModal.addEventListener('click', (e) => {
+            if (e.target === addModal) {
+                // Fechar câmera se estiver aberta
+                qrScanActive = false;
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                    cameraStream = null;
+                }
+                cameraPreview.classList.remove('active');
+                scanBtn.textContent = '📷 Escanear QR Code';
+                scanBtn.style.background = '';
+
+                addModal.classList.remove('active');
+                clientForm.reset();
+            }
+        });
+
+        clientForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('clientName').value.trim();
+            const address = document.getElementById('clientAddress').value.trim();
+            const br = document.getElementById('clientBR').value.trim();
+
+            if (!name || !address) {
+                showToast('Por favor, preencha todos os campos.', 'warning');
+                return;
+            }
+
+            const client = await addClient(name, address, state.currentLocation.lat, state.currentLocation.lng, br);
+
+            if (!client) return; // Error already shown
+
+            addModal.classList.remove('active');
+            clientForm.reset();
+
+            // Show success feedback
+            showToast(`Cliente "${name}" adicionado com sucesso!`, 'success');
+            const originalText = addClientBtn.textContent;
+            addClientBtn.textContent = '✓';
+            addClientBtn.style.background = '#10b981';
+            setTimeout(() => {
+                addClientBtn.textContent = originalText;
+                addClientBtn.style.background = '';
+            }, 1500);
+        });
+
+        // Edit Client Modal Controls
+        const editModal = document.getElementById('editClientModal');
+        const editCancelBtn = document.getElementById('editCancelBtn');
+        const editClientForm = document.getElementById('editClientForm');
+
+        editCancelBtn.addEventListener('click', () => {
+            editModal.classList.remove('active');
+            editClientForm.reset();
+            state.editingClientId = null;
+        });
+
+        editModal.addEventListener('click', (e) => {
+            if (e.target === editModal) {
+                editModal.classList.remove('active');
+                editClientForm.reset();
+                state.editingClientId = null;
+            }
+        });
+
+        editClientForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('editClientName').value.trim();
+            const address = document.getElementById('editClientAddress').value.trim();
+            const br = document.getElementById('editClientBR').value.trim();
+
+            if (!name || !address) {
+                showToast('Por favor, preencha todos os campos.', 'warning');
+                return;
+            }
+
+            if (state.editingClientId) {
+                await updateClient(state.editingClientId, name, address, br);
+                showToast(`Cliente "${name}" atualizado com sucesso!`, 'success');
+            }
+
+            editModal.classList.remove('active');
+            editClientForm.reset();
+            state.editingClientId = null;
+        });
+
+        // Search Functionality
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            state.searchQuery = e.target.value;
+            updateClientsList();
+
+            // Show/hide clear button
+            if (state.searchQuery) {
+                clearSearchBtn.classList.add('visible');
+            } else {
+                clearSearchBtn.classList.remove('visible');
+            }
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            state.searchQuery = '';
+            clearSearchBtn.classList.remove('visible');
+            updateClientsList();
+            searchInput.focus();
+        });
+
+        // Mobile Menu Toggle
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        // Close sidebar when clicking on map (mobile)
+        document.getElementById('map').addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+
+        // State for route optimization
+        state.routeData = [];  // Armazena dados da planilha para roteirização
+        state.optimizedRoute = null;  // Rota otimizada pela IA
+        state.routePolylines = [];  // Polylines da rota otimizada
+
+        // Geocoding: Convert address to coordinates using Google Maps (via geocode.maps.co)
+        async function geocodeAddress(address, city = '', zipcode = '', bairro = '') {
+            try {
+                // Construir query completo com todas as informações disponíveis
+                let query = address;
+                if (bairro) query += `, ${bairro}`;
+                if (city) query += `, ${city}`;
+                if (zipcode) query += `, ${zipcode}`;
+                query += ', Brasil';
+
+                console.log(`🔍 Geocoding: ${query}`);
+
+                // Usar API gratuita de geocoding que utiliza dados do Google Maps
+                const url = `https://geocode.maps.co/search?q=${encodeURIComponent(query)}&countrycodes=br`;
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    console.warn('Geocode.maps.co falhou, tentando Nominatim...');
+                    return await geocodeAddressNominatim(address, city, zipcode, bairro);
+                }
+
+                const results = await response.json();
+
+                if (results && results.length > 0) {
+                    // Pegar o resultado mais preciso (primeiro)
+                    const best = results[0];
+                    console.log(`✓ Geocoded: ${best.display_name}`);
+                    return {
+                        latitude: parseFloat(best.lat),
+                        longitude: parseFloat(best.lon),
+                        displayName: best.display_name,
+                        confidence: best.importance || 0.5
+                    };
+                }
+
+                // Se não encontrou, tentar com Nominatim
+                console.warn('Nenhum resultado no geocode.maps.co, tentando Nominatim...');
+                return await geocodeAddressNominatim(address, city, zipcode, bairro);
+
+            } catch (error) {
+                console.error('Erro no geocoding:', error);
+                // Fallback para Nominatim em caso de erro
+                return await geocodeAddressNominatim(address, city, zipcode, bairro);
+            }
+        }
+
+        // Fallback: Geocoding usando Nominatim (OpenStreetMap)
+        async function geocodeAddressNominatim(address, city = '', zipcode = '', bairro = '') {
+            try {
+                let query = address;
+                if (bairro) query += `, ${bairro}`;
+                if (city) query += `, ${city}`;
+                if (zipcode) query += `, ${zipcode}`;
+                query += ', Brasil';
+
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=br&addressdetails=1`;
+
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'GPS Navigation App'
+                    }
+                });
+
+                if (!response.ok) return null;
+
+                const results = await response.json();
+
+                if (results && results.length > 0) {
+                    console.log(`✓ Nominatim: ${results[0].display_name}`);
+                    return {
+                        latitude: parseFloat(results[0].lat),
+                        longitude: parseFloat(results[0].lon),
+                        displayName: results[0].display_name,
+                        confidence: results[0].importance || 0.3
+                    };
+                }
+
+                return null;
+            } catch (error) {
+                console.error('Erro no Nominatim:', error);
+                return null;
+            }
+        }
+
+        // Calculate distance between two coordinates (Haversine formula) in km
+        function calculateDistanceBetweenCoords(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Use AI to validate and correct address coordinates
+        async function validateAddressWithAI(item) {
+            return new Promise((resolve, reject) => {
+                const handlerName = `ai-geocode-${Date.now()}`;
+
+                // Register handler for AI response
+                window.Poe.registerHandler(handlerName, (result) => {
+                    if (result.status === 'complete' && result.responses && result.responses.length > 0) {
+                        const response = result.responses[0];
+                        try {
+                            // Parse JSON response from AI
+                            const jsonMatch = response.content.match(/\{[\s\S]*"latitude"[\s\S]*"longitude"[\s\S]*\}/);
+                            if (jsonMatch) {
+                                const coords = JSON.parse(jsonMatch[0]);
+                                if (coords.latitude && coords.longitude) {
+                                    resolve({
+                                        latitude: parseFloat(coords.latitude),
+                                        longitude: parseFloat(coords.longitude)
+                                    });
+                                    return;
+                                }
+                            }
+                            resolve(null);
+                        } catch (error) {
+                            console.error('Erro ao parsear resposta da IA:', error);
+                            resolve(null);
+                        }
+                    } else if (result.status === 'error') {
+                        resolve(null);
+                    }
+                });
+
+                // Send request to AI
+                const prompt = `Preciso validar e corrigir as coordenadas de um endereço no Brasil.
+
+Endereço: ${item.address}
+Bairro: ${item.bairro || 'não informado'}
+Cidade: ${item.city || 'não informada'}
+CEP: ${item.zipcode || 'não informado'}
+Coordenadas originais: ${item.originalLatitude}, ${item.originalLongitude}
+
+Por favor, retorne APENAS um objeto JSON com as coordenadas corretas e precisas do endereço (no ponto exato da rua e número), no formato:
+{"latitude": -23.550520, "longitude": -46.633308}
+
+Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longitude": null}`;
+
+                window.Poe.sendUserMessage(`@GPT-5.1 ${prompt}`, {
+                    handler: handlerName,
+                    stream: false,
+                    openChat: false
+                }).catch(error => {
+                    console.error('Erro ao enviar mensagem para IA:', error);
+                    resolve(null);
+                });
+
+                // Timeout de 30 segundos
+                setTimeout(() => resolve(null), 30000);
+            });
+        }
+
+        // Validate and correct coordinates using geocoding and AI
+        async function validateAndCorrectCoordinates(routeData, statusElement) {
+            let correctedCount = 0;
+            let skippedCount = 0;
+            let validatedCount = 0;
+            const maxDistance = 0.2; // Distância máxima aceitável em km (200m) - mais rigoroso
+            const warningDistance = 0.05; // Avisar se diferença > 50m
+
+            for (let i = 0; i < routeData.length; i++) {
+                const item = routeData[i];
+
+                if (!item.needsValidation) continue;
+
+                statusElement.textContent = `Validando coordenadas... ${i + 1}/${routeData.length} (${correctedCount} corrigidas, ${validatedCount} validadas)`;
+
+                // Delay para respeitar rate limit das APIs
+                if (i > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1200));
+                }
+
+                try {
+                    // Fazer geocoding do endereço com todas as informações disponíveis
+                    const geocoded = await geocodeAddress(item.address, item.city, item.zipcode, item.bairro);
+
+                    if (!geocoded) {
+                        console.warn(`⚠️ Geocoding falhou para: ${item.address}`);
+
+                        // Tentar usar IA para corrigir/validar endereço
+                        if (window.Poe && typeof window.Poe.sendUserMessage === 'function') {
+                            try {
+                                const aiCorrected = await validateAddressWithAI(item);
+                                if (aiCorrected) {
+                                    item.latitude = aiCorrected.latitude;
+                                    item.longitude = aiCorrected.longitude;
+                                    item.wasCorrected = true;
+                                    item.correctedByAI = true;
+                                    correctedCount++;
+                                    console.log(`🤖 IA corrigiu: ${item.address}`);
+                                } else {
+                                    skippedCount++;
+                                }
+                            } catch (error) {
+                                console.error('Erro na validação com IA:', error);
+                                skippedCount++;
+                            }
+                        } else {
+                            skippedCount++;
+                        }
+
+                        item.needsValidation = false;
+                        continue;
+                    }
+
+                    // Calcular distância entre coordenadas da planilha e geocodificadas
+                    const distance = calculateDistanceBetweenCoords(
+                        item.originalLatitude,
+                        item.originalLongitude,
+                        geocoded.latitude,
+                        geocoded.longitude
+                    );
+
+                    const distanceMeters = distance * 1000;
+                    console.log(`📍 ${item.address}: Distância = ${distanceMeters.toFixed(0)}m`);
+
+                    // Se a distância for maior que o limite, usar coordenadas geocodificadas
+                    if (distance > maxDistance) {
+                        console.log(`🔧 CORRIGINDO coordenadas (${distanceMeters.toFixed(0)}m de diferença)`);
+                        console.log(`   Original: ${item.originalLatitude}, ${item.originalLongitude}`);
+                        console.log(`   Corrigida: ${geocoded.latitude}, ${geocoded.longitude}`);
+                        console.log(`   Endereço geocodificado: ${geocoded.displayName}`);
+
+                        item.latitude = geocoded.latitude;
+                        item.longitude = geocoded.longitude;
+                        item.wasCorrected = true;
+                        item.correctionDistance = distance;
+                        item.geocodedAddress = geocoded.displayName;
+                        correctedCount++;
+                    } else if (distance > warningDistance) {
+                        console.log(`⚠️ Coordenadas com pequena diferença (${distanceMeters.toFixed(0)}m) - mantendo original`);
+                        validatedCount++;
+                    } else {
+                        console.log(`✓ Coordenadas precisas (diferença de ${distanceMeters.toFixed(0)}m)`);
+                        validatedCount++;
+                    }
+
+                    item.needsValidation = false;
+
+                } catch (error) {
+                    console.error(`Erro ao validar ${item.address}:`, error);
+                    item.needsValidation = false;
+                    skippedCount++;
+                }
+            }
+
+            console.log(`\n=== RESUMO DA VALIDAÇÃO ===`);
+            console.log(`✓ ${validatedCount} endereços com coordenadas precisas`);
+            console.log(`🔧 ${correctedCount} endereços com coordenadas corrigidas`);
+            console.log(`⚠️ ${skippedCount} endereços não validados`);
+            console.log(`📊 Total processado: ${routeData.length}`);
+
+            if (correctedCount > 0) {
+                showToast(`Validação concluída: ${correctedCount} coordenadas corrigidas, ${validatedCount} validadas`, 'success');
+            } else if (validatedCount > 0) {
+                showToast(`Todas as ${validatedCount} coordenadas estão precisas!`, 'success');
+            }
+
+            if (skippedCount > 0) {
+                console.warn(`⚠️ ${skippedCount} endereços não puderam ser validados - usando coordenadas originais`);
+            }
+        }
+
+        // Upload Excel Spreadsheet
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadInput = document.getElementById('uploadInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        uploadBtn.addEventListener('click', () => {
+            uploadInput.click();
+        });
+
+        uploadInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            uploadStatus.textContent = 'Processando planilha...';
+            uploadStatus.className = 'upload-status';
+
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data);
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                // Limpar base de dados anterior
+                state.brDatabase = {};
+                state.routeData = [];  // Limpar dados de rota anterior
+
+                let count = 0;
+
+                // Processar cada linha da planilha
+                for (let i = 0; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+
+                    // Procurar pelas colunas BR e Endereço (aceita vários formatos)
+                    let brCode = null;
+                    let address = null;
+
+                    // Buscar coluna de código BR
+                    if (row['SPX TN']) {
+                        brCode = String(row['SPX TN']).trim();
+                    } else if (row['BR']) {
+                        brCode = String(row['BR']).trim();
+                    } else if (row['Código BR']) {
+                        brCode = String(row['Código BR']).trim();
+                    } else if (row['Codigo BR']) {
+                        brCode = String(row['Codigo BR']).trim();
+                    } else if (row['Code']) {
+                        brCode = String(row['Code']).trim();
+                    }
+
+                    // Buscar coluna de endereço
+                    if (row['Destination Address']) {
+                        address = String(row['Destination Address']).trim();
+                    } else if (row['Endereço']) {
+                        address = String(row['Endereço']).trim();
+                    } else if (row['Endereco']) {
+                        address = String(row['Endereco']).trim();
+                    } else if (row['Address']) {
+                        address = String(row['Address']).trim();
+                    }
+
+                    // Buscar latitude e longitude
+                    let lat = row['Latitude'] || row['latitude'] || row['LAT'] || row['lat'];
+                    let lng = row['Longitude'] || row['longitude'] || row['LNG'] || row['lng'] || row['LON'] || row['lon'];
+
+                    // Se encontrou ambos, adicionar ao banco de dados
+                    if (brCode && address && brCode !== 'undefined' && address !== 'undefined') {
+                        state.brDatabase[brCode] = address;
+                        count++;
+
+                        // Se tiver coordenadas, adicionar aos dados de rota (será validado depois)
+                        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                            state.routeData.push({
+                                sequence: row['Sequence'] || i + 1,
+                                stop: row['Stop'] || row['Parada'] || i + 1,
+                                spxTn: brCode,
+                                address: address,
+                                bairro: row['Bairro'] || row['Neighborhood'] || '',
+                                city: row['City'] || row['Cidade'] || '',
+                                zipcode: row['Zipcode/Postal code'] || row['CEP'] || '',
+                                latitude: parseFloat(lat),
+                                longitude: parseFloat(lng),
+                                originalLatitude: parseFloat(lat),  // Salvar original para comparação
+                                originalLongitude: parseFloat(lng),
+                                needsValidation: true  // Flag para validar coordenadas
+                            });
+                        }
+                    }
+                }
+
+                if (count > 0) {
+                    // Validar e corrigir coordenadas antes de agrupar
+                    uploadStatus.textContent = 'Validando coordenadas com geocoding e IA...';
+                    await validateAndCorrectCoordinates(state.routeData, uploadStatus);
+
+                    // Agrupar pacotes por endereço (mesmas coordenadas)
+                    const groupedByAddress = {};
+                    state.routeData.forEach(item => {
+                        const key = `${item.latitude.toFixed(6)}_${item.longitude.toFixed(6)}`;
+                        if (!groupedByAddress[key]) {
+                            groupedByAddress[key] = {
+                                ...item,
+                                packages: [],
+                                sequences: [],
+                                packageCount: 0
+                            };
+                        }
+                        groupedByAddress[key].packages.push(item.spxTn);
+                        groupedByAddress[key].sequences.push(item.sequence);
+                        groupedByAddress[key].packageCount++;
+                    });
+
+                    // Atualizar routeData com dados agrupados
+                    state.routeData = Object.values(groupedByAddress);
+
+                    // Salvar no Supabase
+                    uploadStatus.textContent = 'Salvando no banco de dados...';
+                    await saveBRDatabaseToSupabase(state.brDatabase);
+
+                    const totalPackages = state.routeData.reduce((sum, item) => sum + item.packageCount, 0);
+                    uploadStatus.textContent = `✓ ${count} códigos BR carregados! ${state.routeData.length} endereços, ${totalPackages} pacotes.`;
+                    uploadStatus.className = 'upload-status success';
+
+                    // Mostrar botão de roteirização se tiver dados com coordenadas
+                    if (state.routeData.length > 0) {
+                        document.getElementById('optimizeRouteBtn').style.display = 'block';
+                        console.log(`🗺️ ${state.routeData.length} endereços prontos para roteirização`);
+                        console.log(`📦 Total de pacotes: ${totalPackages}`);
+                    }
+                } else {
+                    uploadStatus.textContent = '⚠ Nenhum código encontrado';
+                    uploadStatus.className = 'upload-status';
+                    showToast('Nenhum código BR encontrado. Verifique se a planilha tem as colunas "SPX TN" e "Destination Address".', 'warning');
+                }
+
+                console.log('📊 Base de dados BR carregada:', state.brDatabase);
+                console.log(`📊 Total de códigos: ${count}`);
+                console.log('📍 Dados de rota agrupados:', state.routeData);
+
+            } catch (error) {
+                console.error('Erro ao processar planilha:', error);
+                uploadStatus.textContent = '❌ Erro ao processar planilha';
+                uploadStatus.className = 'upload-status';
+                showToast('Erro ao processar planilha. Verifique o formato.', 'error');
+            }
+
+            // Limpar input
+            uploadInput.value = '';
+        });
+
+        // AI Route Optimization
+        const optimizeRouteBtn = document.getElementById('optimizeRouteBtn');
+        const routeStatus = document.getElementById('routeStatus');
+
+        optimizeRouteBtn.addEventListener('click', async () => {
+            if (state.routeData.length === 0) {
+                showToast('Nenhum dado de rota disponível. Faça upload de uma planilha primeiro.', 'warning');
+                return;
+            }
+
+            // Parar navegação ativa antes de otimizar rota
+            if (state.navigationActive) {
+                console.log('⏹️ Parando navegação ativa antes de roteirizar');
+                stopRealtimeNavigation();
+            }
+
+            routeStatus.textContent = '🤖 Processando roteirização...';
+            routeStatus.className = 'upload-status';
+            optimizeRouteBtn.disabled = true;
+
+            try {
+                // Verificar se Poe API está disponível
+                if (window.Poe && typeof window.Poe.registerHandler === 'function') {
+                    // Usar IA do Poe se disponível
+                    await optimizeRouteWithAI();
+                } else {
+                    // Usar algoritmo local (Nearest Neighbor)
+                    console.log('🔧 Poe API não disponível, usando algoritmo local');
+                    const optimizedOrder = optimizeRouteLocally(state.routeData);
+                    processOptimizedRoute(optimizedOrder);
+                    routeStatus.textContent = `✓ Rota otimizada! ${optimizedOrder.length} paradas.`;
+                    routeStatus.className = 'upload-status success';
+                    showToast(`Rota otimizada com sucesso! ${optimizedOrder.length} paradas.`, 'success');
+                    optimizeRouteBtn.disabled = false;
+                }
+
+            } catch (error) {
+                console.error('Erro ao iniciar roteirização:', error);
+                routeStatus.textContent = '❌ Erro ao iniciar roteirização';
+                routeStatus.className = 'upload-status';
+                showToast('Erro ao iniciar roteirização: ' + error.message, 'error');
+                optimizeRouteBtn.disabled = false;
+            }
+        });
+
+        // Optimize Route with AI (Poe API)
+        async function optimizeRouteWithAI() {
+            // Preparar dados para enviar à IA
+            const routeDataStr = JSON.stringify(state.routeData.map((stop, idx) => ({
+                index: idx,
+                stop: stop.stop,
+                address: stop.address,
+                city: stop.city,
+                latitude: stop.latitude,
+                longitude: stop.longitude
+            })));
+
+            // Registrar handler para receber resposta da IA
+            window.Poe.registerHandler("route-optimizer", (result, context) => {
+                const msg = result.responses[0];
+
+                if (msg.status === "error") {
+                    routeStatus.textContent = "❌ Erro na IA: " + msg.statusText;
+                    routeStatus.className = 'upload-status';
+                    optimizeRouteBtn.disabled = false;
+                    showToast('Erro ao processar roteirização com IA', 'error');
+                } else if (msg.status === "complete") {
+                    try {
+                        // Extrair JSON da resposta
+                        const content = msg.content;
+                        console.log('🤖 Resposta da IA:', content);
+
+                        // Procurar por JSON na resposta (pode vir com texto explicativo)
+                        const jsonMatch = content.match(/\[[\s\S]*\]/);
+                        if (jsonMatch) {
+                            const optimizedOrder = JSON.parse(jsonMatch[0]);
+                            processOptimizedRoute(optimizedOrder);
+                            routeStatus.textContent = `✓ Rota otimizada com IA! ${optimizedOrder.length} paradas.`;
+                            routeStatus.className = 'upload-status success';
+                            showToast(`Rota otimizada com IA! ${optimizedOrder.length} paradas.`, 'success');
+                        } else {
+                            throw new Error('Resposta da IA não contém JSON válido');
+                        }
+                    } catch (error) {
+                        console.error('Erro ao processar resposta da IA:', error);
+                        routeStatus.textContent = '❌ Erro ao processar resposta';
+                        routeStatus.className = 'upload-status';
+                        showToast('Erro ao processar resposta da IA', 'error');
+                    }
+                    optimizeRouteBtn.disabled = false;
+                }
+            });
+
+            // Chamar IA para otimizar rota
+            const prompt = `Você é um especialista em otimização de rotas de entrega. Analise os seguintes endereços com suas coordenadas e retorne a ORDEM OTIMIZADA de paradas que minimiza a distância total percorrida.
+
+DADOS DAS PARADAS:
+${routeDataStr}
+
+INSTRUÇÕES:
+1. Use o algoritmo de vizinho mais próximo (Nearest Neighbor) ou similar para otimizar
+2. Considere apenas as coordenadas (latitude/longitude) para calcular distâncias
+3. Retorne APENAS um array JSON com os índices na ordem otimizada
+4. Exemplo de resposta: [0, 5, 3, 1, 4, 2]
+5. NÃO adicione explicações ou texto adicional, APENAS o array JSON
+
+Retorne a ordem otimizada:`;
+
+            await window.Poe.sendUserMessage(`@Claude-Sonnet-4.5 ${prompt}`, {
+                handler: "route-optimizer",
+                stream: false,
+                openChat: false
+            });
+        }
+
+        // Optimize Route Locally (Nearest Neighbor Algorithm)
+        function optimizeRouteLocally(routeData) {
+            if (routeData.length === 0) return [];
+            if (routeData.length === 1) return [0];
+
+            // Função para calcular distância entre dois pontos (Haversine)
+            function getDistance(lat1, lng1, lat2, lng2) {
+                const R = 6371; // Raio da Terra em km
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLng = (lng2 - lng1) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                         Math.sin(dLng/2) * Math.sin(dLng/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c;
+            }
+
+            // Usar posição atual como ponto de partida se disponível
+            let currentLat, currentLng;
+            if (state.currentLocation) {
+                currentLat = state.currentLocation.lat;
+                currentLng = state.currentLocation.lng;
+            } else {
+                // Usar primeira parada como ponto de partida
+                currentLat = routeData[0].latitude;
+                currentLng = routeData[0].longitude;
+            }
+
+            const unvisited = new Set(routeData.map((_, idx) => idx));
+            const route = [];
+
+            // Algoritmo do vizinho mais próximo
+            while (unvisited.size > 0) {
+                let nearestIndex = -1;
+                let nearestDistance = Infinity;
+
+                // Encontrar o ponto não visitado mais próximo
+                for (const idx of unvisited) {
+                    const stop = routeData[idx];
+                    const distance = getDistance(
+                        currentLat, currentLng,
+                        stop.latitude, stop.longitude
+                    );
+
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestIndex = idx;
+                    }
+                }
+
+                // Adicionar à rota e marcar como visitado
+                route.push(nearestIndex);
+                unvisited.delete(nearestIndex);
+
+                // Atualizar posição atual
+                currentLat = routeData[nearestIndex].latitude;
+                currentLng = routeData[nearestIndex].longitude;
+            }
+
+            console.log('🗺️ Rota otimizada localmente:', route);
+            return route;
+        }
+
+        // Process Optimized Route from AI
+        function processOptimizedRoute(optimizedOrder) {
+            // Ativar modo de visualização de rota otimizada
+            state.viewingOptimizedRoute = true;
+
+            // Fechar TODOS os popups, incluindo o "Você está aqui"
+            state.map.closePopup();
+            if (state.currentLocationMarker) {
+                state.currentLocationMarker.closePopup();
+            }
+
+            // Limpar marcadores e polylines anteriores da rota otimizada
+            state.routePolylines.forEach(polyline => state.map.removeLayer(polyline));
+            state.routePolylines = [];
+
+            // Detectar se é mobile para otimizações
+            const isMobile = window.innerWidth <= 768;
+
+            // Criar marcadores numerados para cada parada na ordem otimizada
+            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+
+            // Decidir tipo de marcador: ícones bonitos para poucas paradas, simples para muitas
+            const totalStops = optimizedOrder.length;
+            const usePrettyIcons = !isMobile || totalStops <= 10;  // Reduzido de 20 para 10
+
+            console.log(`🎨 Renderizando ${totalStops} paradas - Modo: ${isMobile ? 'MOBILE' : 'DESKTOP'} - Ícones: ${usePrettyIcons ? 'BONITOS ✨' : 'SIMPLES ⚡'}`);
+
+            optimizedOrder.forEach((originalIndex, routeIndex) => {
+                const stop = state.routeData[originalIndex];
+                if (!stop) return;
+
+                const stopNumber = routeIndex + 1;
+                const color = colors[routeIndex % colors.length];
+                const packageCount = stop.packageCount || 1;
+
+                // Mobile com MUITAS paradas: usar CircleMarker simples (máxima performance)
+                if (isMobile && !usePrettyIcons) {
+                    const circleMarker = L.circleMarker([stop.latitude, stop.longitude], {
+                        radius: 12,
+                        fillColor: color,
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).addTo(state.map);
+
+                    // Popup lazy-loaded com info de pacotes e botão de navegação
+                    circleMarker.on('click', function() {
+                        const sequencesList = stop.sequences && stop.sequences.length > 0
+                            ? stop.sequences.sort((a, b) => a - b).join(', ')
+                            : '-';
+
+                        this.bindPopup(`
+                            <div style="font-size: 13px; min-width: 200px;">
+                                <div style="font-weight: bold; margin-bottom: 6px; color: ${color};">
+                                    🚚 Parada ${stopNumber} • ${packageCount} pacote${packageCount > 1 ? 's' : ''}
+                                </div>
+                                <div style="margin: 3px 0;">📍 ${stop.address}</div>
+                                <div style="margin: 3px 0; font-size: 11px; color: #666;">Ordem: ${sequencesList}</div>
+                                <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
+                                    style="margin-top: 8px; width: 100%; padding: 8px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                    🧭 Navegar até aqui
+                                </button>
+                            </div>
+                        `).openPopup();
+                    });
+
+                    state.routePolylines.push(circleMarker);
+                    return; // Pula resto do código
+                }
+
+                // PINO DE GPS com numeração de pacotes no topo (Desktop OU Mobile com poucas paradas)
+                // CSS simplificado para mobile: menos sombras e bordas
+                const iconHTML = `
+                    <div style="position: relative; width: 40px; height: ${packageCount > 1 ? '55px' : '40px'};">
+                        ${packageCount > 1 ? `
+                            <div style="
+                                position: absolute;
+                                top: -10px;
+                                left: 50%;
+                                transform: translateX(-50%);
+                                background: #ef4444;
+                                color: white;
+                                border-radius: ${isMobile ? '8px' : '12px'};
+                                padding: 2px ${isMobile ? '6px' : '8px'};
+                                font-size: ${isMobile ? '10px' : '11px'};
+                                font-weight: bold;
+                                border: ${isMobile ? '1px' : '2px'} solid white;
+                                box-shadow: ${isMobile ? '0 1px 3px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.3)'};
+                                white-space: nowrap;
+                                z-index: 10;
+                            ">
+                                ${packageCount} pacote${packageCount > 1 ? 's' : ''}
+                            </div>
+                        ` : ''}
+                        <div style="
+                            position: relative;
+                            width: ${isMobile ? '32px' : '36px'};
+                            height: ${isMobile ? '32px' : '36px'};
+                            background: ${color};
+                            border-radius: 50% 50% 50% 0;
+                            border: ${isMobile ? '2px' : '3px'} solid white;
+                            box-shadow: ${isMobile ? '0 2px 5px rgba(0,0,0,0.35)' : '0 3px 8px rgba(0,0,0,0.4)'};
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            transform: rotate(-45deg);
+                            margin: ${packageCount > 1 ? '18px' : '0'} auto 0 auto;
+                        ">
+                            <div style="
+                                transform: rotate(45deg);
+                                color: white;
+                                font-weight: bold;
+                                font-size: ${isMobile ? '13px' : '16px'};
+                            ">
+                                ${stopNumber}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const numberedIcon = L.divIcon({
+                    className: 'numbered-marker',
+                    html: iconHTML,
+                    iconSize: packageCount > 1 ? [40, 55] : [40, 40],
+                    iconAnchor: packageCount > 1 ? [20, 55] : [20, 40]
+                });
+
+                // Adicionar marcador
+                const marker = L.marker([stop.latitude, stop.longitude], {
+                    icon: numberedIcon,
+                    title: `Parada ${stopNumber}: ${stop.address}`
+                }).addTo(state.map);
+
+                // Preparar lista completa de sequences (sem abreviação)
+                const sequencesList = stop.sequences && stop.sequences.length > 0
+                    ? stop.sequences.sort((a, b) => a - b).join(', ')
+                    : stop.sequence || '-';
+
+                // Preparar lista de pacotes (mais limitada para mobile)
+                const packagesList = stop.packages && stop.packages.length > 0
+                    ? (stop.packages.length <= (isMobile ? 5 : 10)
+                        ? stop.packages.join(', ')
+                        : `${stop.packages.slice(0, isMobile ? 5 : 10).join(', ')}... (+${stop.packages.length - (isMobile ? 5 : 10)})`)
+                    : stop.spxTn || '-';
+
+                // Popup simplificado para mobile
+                const popupContent = isMobile ? `
+                    <div class="popup-content" style="max-width: 250px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 16px;">🚚 Parada ${stopNumber}</h3>
+                        <p style="margin: 4px 0;"><strong>📦 Pacotes:</strong> ${packageCount}</p>
+                        <p style="margin: 4px 0;"><strong>🔢 Ordem:</strong> ${sequencesList}</p>
+                        <p style="margin: 4px 0;"><strong>📍</strong> ${stop.address}</p>
+                        ${stop.city ? `<p style="margin: 4px 0; font-size: 12px;"><strong>🏙️</strong> ${stop.city}</p>` : ''}
+                        <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
+                            style="margin-top: 10px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                            🧭 Navegar até aqui
+                        </button>
+                    </div>
+                ` : `
+                    <div class="popup-content">
+                        <h3>🚚 Parada ${stopNumber}</h3>
+                        <p><strong>📦 Pacotes:</strong> ${packageCount}</p>
+                        <p><strong>🔢 Ordem:</strong><br><span style="font-size: 12px; color: #666;">${sequencesList}</span></p>
+                        <p><strong>📍 Endereço:</strong><br>${stop.address}</p>
+                        <p><strong>🏙️ Cidade:</strong> ${stop.city}</p>
+                        <p><strong>📮 CEP:</strong> ${stop.zipcode}</p>
+                        <p><strong>📦 Códigos SPX:</strong><br><span style="font-size: 11px; color: #666;">${packagesList}</span></p>
+                        <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
+                            style="margin-top: 12px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            🧭 Navegar até aqui
+                        </button>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+
+                // Armazenar para limpar depois
+                state.routePolylines.push(marker);
+
+                // Desenhar linha para a próxima parada (sempre desenhar para mostrar a rota otimizada)
+                if (routeIndex < optimizedOrder.length - 1) {
+                    const nextStop = state.routeData[optimizedOrder[routeIndex + 1]];
+                    if (nextStop) {
+                        const polyline = L.polyline([
+                            [stop.latitude, stop.longitude],
+                            [nextStop.latitude, nextStop.longitude]
+                        ], {
+                            color: color,
+                            weight: 3,
+                            opacity: 0.7,
+                            dashArray: '10, 5'
+                        }).addTo(state.map);
+
+                        state.routePolylines.push(polyline);
+                    }
+                }
+            });
+
+            // Ajustar zoom e centralizar mapa para mostrar toda a rota
+            if (optimizedOrder.length > 0) {
+                const bounds = L.latLngBounds(
+                    optimizedOrder.map(idx => [state.routeData[idx].latitude, state.routeData[idx].longitude])
+                );
+
+                // Ajustar mapa com delay para garantir que todos os marcadores foram renderizados
+                setTimeout(() => {
+                    console.log('📍 Ajustando visualização para mostrar rota otimizada');
+                    state.map.fitBounds(bounds, {
+                        padding: isMobile ? [40, 40] : [80, 80],
+                        maxZoom: isMobile ? 15 : 16,
+                        animate: true,
+                        duration: 1.0
+                    });
+                }, 600);  // Delay para garantir que stopRealtimeNavigation completou
+            }
+
+            // Armazenar rota otimizada
+            state.optimizedRoute = optimizedOrder;
+
+            // Fechar aba lateral em mobile para melhor visualização
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar && sidebar.classList.contains('open') && window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+            }
+
+            console.log('✅ Rota otimizada processada e exibida no mapa');
+            console.log(`📍 Visualizando ${optimizedOrder.length} paradas no mapa`);
+        }
+
+        // Initialize App
+        getCurrentLocation();
+    </script>
+</body>
+</html>
