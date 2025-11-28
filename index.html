@@ -4517,61 +4517,74 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
             let failedCount = 0;
             let usedFromSheet = 0;
 
-            console.log(`🗺️ Iniciando geocoding de ${routeData.length} endereços (user_id: ${state.currentUser?.id}, session: ${sessionId})...`);
-            console.log(`⚠️ Usando Nominatim (OpenStreetMap) - Respeitando limite de 1 req/seg`);
+            console.log(`🗺️ Iniciando geocoding OTIMIZADO de ${routeData.length} endereços (user_id: ${state.currentUser?.id}, session: ${sessionId})...`);
+            console.log(`⚡ Processamento em lote paralelo (5 requisições simultâneas)`);
 
             // Contar quantas coordenadas já temos da planilha
             const withCoords = routeData.filter(item => item.latitude && item.longitude).length;
             console.log(`📊 ${withCoords} endereços já têm coordenadas da planilha (backup)`);
 
-            // Processar endereços UM POR VEZ (Nominatim exige max 1 req/seg)
-            for (let i = 0; i < routeData.length; i++) {
-                // Verificar se esta sessão ainda é válida (usuário não fez logout ou novo upload)
+            // Processar em lotes de 5 endereços simultaneamente para máxima velocidade
+            const BATCH_SIZE = 5;
+            const DELAY_BETWEEN_BATCHES = 250; // 250ms entre lotes (muito mais rápido)
+
+            for (let batchStart = 0; batchStart < routeData.length; batchStart += BATCH_SIZE) {
+                // Verificar se esta sessão ainda é válida
                 if (state.uploadSessionId !== sessionId) {
                     console.log(`⚠️ Sessão de upload cancelada ou substituída. Parando geocoding.`);
                     return;
                 }
 
-                const item = routeData[i];
+                const batchEnd = Math.min(batchStart + BATCH_SIZE, routeData.length);
+                const batch = routeData.slice(batchStart, batchEnd);
 
-                // Mostrar progresso com identificação do usuário
-                const userInfo = state.currentUser ? ` [${state.currentUser.username}]` : '';
-                statusElement.textContent = `Geocoding${userInfo}... ${i + 1}/${routeData.length} (✅ ${successCount} | ❌ ${failedCount} | 📋 ${usedFromSheet})`;
+                // Processar lote em paralelo
+                const promises = batch.map(async (item, batchIndex) => {
+                    const globalIndex = batchStart + batchIndex;
 
-                try {
-                    // Fazer geocoding do endereço
-                    const geocoded = await geocodeAddress(item.address, item.city, item.zipcode, item.bairro);
+                    try {
+                        // Fazer geocoding do endereço
+                        const geocoded = await geocodeAddress(item.address, item.city, item.zipcode, item.bairro);
 
-                    if (geocoded) {
-                        // Usar coordenadas do geocoding
-                        item.latitude = geocoded.latitude;
-                        item.longitude = geocoded.longitude;
-                        item.geocodedAddress = geocoded.displayName;
-                        item.addressCleaned = cleanAddress(item.address);
-                        successCount++;
-                        console.log(`✅ [${i + 1}/${routeData.length}] ${item.addressCleaned} → ${geocoded.latitude.toFixed(6)}, ${geocoded.longitude.toFixed(6)}`);
-                    } else {
-                        // Se falhou mas tem coordenadas da planilha, usar elas
+                        if (geocoded) {
+                            // Usar coordenadas do geocoding
+                            item.latitude = geocoded.latitude;
+                            item.longitude = geocoded.longitude;
+                            item.geocodedAddress = geocoded.displayName;
+                            item.addressCleaned = cleanAddress(item.address);
+                            successCount++;
+                            console.log(`✅ [${globalIndex + 1}/${routeData.length}] ${item.addressCleaned}`);
+                        } else {
+                            // Se falhou mas tem coordenadas da planilha, usar elas
+                            if (item.latitude && item.longitude) {
+                                console.log(`📋 [${globalIndex + 1}/${routeData.length}] Usando planilha: ${item.address}`);
+                                usedFromSheet++;
+                            } else {
+                                console.error(`❌ [${globalIndex + 1}/${routeData.length}] Falha: ${item.address}`);
+                                failedCount++;
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`❌ [${globalIndex + 1}/${routeData.length}] Erro: ${item.address}`, error);
                         if (item.latitude && item.longitude) {
-                            console.log(`📋 [${i + 1}/${routeData.length}] Geocoding falhou, usando planilha: ${item.address}`);
                             usedFromSheet++;
                         } else {
-                            console.error(`❌ [${i + 1}/${routeData.length}] Falha total: ${item.address}`);
                             failedCount++;
                         }
                     }
-                } catch (error) {
-                    console.error(`❌ [${i + 1}/${routeData.length}] Erro: ${item.address}`, error);
-                    if (item.latitude && item.longitude) {
-                        usedFromSheet++;
-                    } else {
-                        failedCount++;
-                    }
-                }
+                });
 
-                // Delay de 1.1 segundos entre requisições (Nominatim exige max 1 req/seg)
-                if (i < routeData.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 1100));
+                // Aguardar conclusão do lote
+                await Promise.all(promises);
+
+                // Atualizar progresso
+                const processed = Math.min(batchEnd, routeData.length);
+                const userInfo = state.currentUser ? ` [${state.currentUser.username}]` : '';
+                statusElement.textContent = `Geocoding${userInfo}... ${processed}/${routeData.length} (✅ ${successCount} | ❌ ${failedCount} | 📋 ${usedFromSheet})`;
+
+                // Delay curto entre lotes
+                if (batchEnd < routeData.length) {
+                    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
                 }
             }
 
