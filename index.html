@@ -1850,6 +1850,13 @@
 
         // Mostrar aplicação após login
         async function showApp() {
+            // Limpar mensagens de status de uploads anteriores
+            const uploadStatus = document.getElementById('uploadStatus');
+            if (uploadStatus) {
+                uploadStatus.textContent = '';
+                uploadStatus.className = 'upload-status';
+            }
+
             document.getElementById('loginContainer').classList.add('hidden');
             document.getElementById('registerContainer').classList.add('hidden');
             document.getElementById('appContainer').style.display = 'flex'; // CRÍTICO: usar flex para layout correto
@@ -2226,6 +2233,13 @@
         async function loadBRDatabaseFromSupabase() {
             if (!state.useSupabase || !state.currentUser) return;
 
+            // Limpar mensagem imediatamente ao iniciar o carregamento
+            const uploadStatus = document.getElementById('uploadStatus');
+            if (uploadStatus) {
+                uploadStatus.textContent = '';
+                uploadStatus.className = 'upload-status';
+            }
+
             try {
                 const { data, error } = await supabase
                     .from('br_addresses')
@@ -2233,8 +2247,6 @@
                     .eq('user_id', state.currentUser.id);
 
                 if (error) throw error;
-
-                const uploadStatus = document.getElementById('uploadStatus');
 
                 if (data && data.length > 0) {
                     state.brDatabase = {};
