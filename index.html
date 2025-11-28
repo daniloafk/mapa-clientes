@@ -2215,12 +2215,13 @@
 
         // Load BR Database from Supabase
         async function loadBRDatabaseFromSupabase() {
-            if (!state.useSupabase) return;
+            if (!state.useSupabase || !state.currentUser) return;
 
             try {
                 const { data, error } = await supabase
                     .from('br_addresses')
-                    .select('*');
+                    .select('*')
+                    .eq('user_id', state.currentUser.id);
 
                 if (error) throw error;
 
@@ -2229,7 +2230,7 @@
                     data.forEach(item => {
                         state.brDatabase[item.br_code] = item.address;
                     });
-                    console.log(`✅ ${data.length} código(s) BR carregado(s) do Supabase`);
+                    console.log(`✅ ${data.length} código(s) BR carregado(s) do Supabase (user_id: ${state.currentUser.id}) - ISOLAMENTO ATIVO`);
 
                     const uploadStatus = document.getElementById('uploadStatus');
                     uploadStatus.textContent = `✓ ${data.length} códigos BR carregados!`;
@@ -2243,21 +2244,22 @@
 
         // Save BR Database to Supabase
         async function saveBRDatabaseToSupabase(brDatabase) {
-            if (!state.useSupabase) return;
+            if (!state.useSupabase || !state.currentUser) return;
 
             try {
-                // Limpar dados antigos
+                // Limpar dados antigos APENAS deste usuário
                 const { error: deleteError } = await supabase
                     .from('br_addresses')
                     .delete()
-                    .neq('br_code', ''); // Deleta todos os registros
+                    .eq('user_id', state.currentUser.id);
 
                 if (deleteError) throw deleteError;
 
-                // Inserir novos dados
+                // Inserir novos dados com user_id
                 const records = Object.entries(brDatabase).map(([br_code, address]) => ({
                     br_code,
-                    address
+                    address,
+                    user_id: state.currentUser.id
                 }));
 
                 if (records.length > 0) {
@@ -2267,7 +2269,7 @@
 
                     if (insertError) throw insertError;
 
-                    console.log(`✅ ${records.length} código(s) BR salvos no Supabase`);
+                    console.log(`✅ ${records.length} código(s) BR salvos no Supabase (user_id: ${state.currentUser.id})`);
                 }
             } catch (error) {
                 console.error('Erro ao salvar banco de dados BR:', error);
@@ -3964,6 +3966,15 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
             const file = e.target.files[0];
             if (!file) return;
 
+            // Verificar se o usuário está logado
+            if (!state.currentUser || !state.currentUser.id) {
+                showToast('Erro: Usuário não autenticado', 'error');
+                uploadStatus.textContent = '❌ Usuário não autenticado';
+                uploadStatus.className = 'upload-status';
+                uploadInput.value = '';
+                return;
+            }
+
             uploadStatus.textContent = 'Processando planilha...';
             uploadStatus.className = 'upload-status';
 
@@ -4076,6 +4087,8 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                     const totalPackages = state.routeData.reduce((sum, item) => sum + item.packageCount, 0);
                     uploadStatus.textContent = `✓ ${count} códigos BR carregados! ${state.routeData.length} endereços, ${totalPackages} pacotes.`;
                     uploadStatus.className = 'upload-status success';
+
+                    console.log(`📊 Planilha processada e salva (user_id: ${state.currentUser.id}) - ISOLAMENTO ATIVO`);
 
                     // Mostrar botão de roteirização se tiver dados com coordenadas
                     if (state.routeData.length > 0) {
