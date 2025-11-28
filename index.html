@@ -1130,20 +1130,97 @@
                 left: 0;
                 right: 0;
                 border-radius: 0;
+                z-index: 10000;
             }
 
             .admin-header {
-                padding: 16px;
+                padding: 14px 16px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .admin-header h1 {
+                font-size: 20px;
+                width: 100%;
+                margin-bottom: 4px;
+            }
+
+            .admin-header-actions {
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .admin-header-actions .btn,
+            .admin-header-actions .logout-btn {
+                flex: 1;
+                min-width: calc(50% - 4px);
+                justify-content: center;
             }
 
             .admin-content {
-                padding: 16px;
+                padding: 12px;
             }
 
-            .user-card,
-            .admin-section {
-                padding: 14px;
+            .user-card {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 14px 12px;
                 margin-bottom: 12px;
+                gap: 12px;
+            }
+
+            .user-info {
+                width: 100%;
+            }
+
+            .user-info h3 {
+                font-size: 16px;
+                margin-bottom: 6px;
+            }
+
+            .user-info p {
+                font-size: 13px;
+                line-height: 1.4;
+            }
+
+            .user-actions {
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .user-actions .btn {
+                flex: 1;
+                min-width: calc(50% - 4px);
+                justify-content: center;
+                font-size: 13px;
+                padding: 10px 12px;
+            }
+
+            .admin-section {
+                padding: 14px 12px;
+                margin-bottom: 12px;
+            }
+
+            .admin-section h2 {
+                font-size: 18px;
+                margin-bottom: 12px;
+            }
+
+            /* Botão de voltar do admin */
+            #closeAdminBtn {
+                min-height: 40px;
+                padding: 10px 16px;
+                font-size: 14px;
+                white-space: nowrap;
+            }
+
+            /* Botão adicionar usuário */
+            #addUserBtn {
+                min-height: 44px;
+                padding: 10px 16px;
+                font-size: 14px;
             }
 
             /* Login Mobile */
@@ -1233,6 +1310,30 @@
             .btn {
                 font-size: 14px;
                 padding: 11px 16px;
+            }
+
+            /* Admin Panel - Small Mobile */
+            .admin-header h1 {
+                font-size: 18px;
+            }
+
+            .user-card {
+                padding: 12px 10px;
+            }
+
+            .user-info h3 {
+                font-size: 15px;
+            }
+
+            .user-actions .btn {
+                font-size: 12px;
+                padding: 8px 10px;
+            }
+
+            #closeAdminBtn,
+            #addUserBtn {
+                font-size: 13px;
+                padding: 8px 14px;
             }
         }
 
@@ -1434,12 +1535,20 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         .admin-header h1 {
             margin: 0;
             color: var(--text-primary);
             font-size: 24px;
+        }
+
+        .admin-header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
         .admin-content {
@@ -1518,40 +1627,83 @@
             right: 10px;
             background: var(--bg-primary);
             padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px var(--shadow);
-            z-index: 1000;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px var(--shadow);
+            z-index: 1500;
             display: flex;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
         }
 
         .user-header-info span {
             color: var(--text-primary);
             font-weight: 600;
+            font-size: 14px;
         }
 
+        /* Mobile User Header */
         @media (max-width: 768px) {
             .login-box {
                 padding: 30px 20px;
             }
 
             .user-header-info {
-                top: auto;
-                bottom: 80px;
-                right: 10px;
-                font-size: 12px;
-                padding: 8px 12px;
+                top: 15px;
+                right: 15px;
+                left: auto;
+                bottom: auto;
+                padding: 10px 12px;
+                gap: 8px;
+                max-width: calc(100vw - 80px);
+                border-radius: 10px;
+            }
+
+            .user-header-info span {
+                font-size: 13px;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
             .admin-btn {
-                font-size: 12px;
-                padding: 8px 12px;
+                font-size: 13px !important;
+                padding: 8px 12px !important;
+                margin-right: 0 !important;
+                min-width: 70px;
+                white-space: nowrap;
             }
 
             .logout-btn {
+                font-size: 13px !important;
+                padding: 8px 12px !important;
+                min-width: 55px;
+                white-space: nowrap;
+            }
+        }
+
+        /* Small Mobile - Stack vertically if needed */
+        @media (max-width: 375px) {
+            .user-header-info {
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 6px;
+                padding: 8px 10px;
+                max-width: calc(100vw - 80px);
+            }
+
+            .user-header-info span {
                 font-size: 12px;
-                padding: 8px 12px;
+                max-width: 120px;
+            }
+
+            .admin-btn,
+            .logout-btn {
+                font-size: 12px !important;
+                padding: 6px 10px !important;
+                width: 100%;
+                min-width: auto;
             }
         }
     </style>
@@ -1619,7 +1771,7 @@
     <div class="admin-panel" id="adminPanel">
         <div class="admin-header">
             <h1>👥 Gerenciar Usuários</h1>
-            <div>
+            <div class="admin-header-actions">
                 <button class="btn btn-primary" id="addUserBtn">➕ Novo Usuário</button>
                 <button class="logout-btn" id="closeAdminBtn">Voltar</button>
             </div>
