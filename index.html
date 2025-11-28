@@ -2313,16 +2313,42 @@
 
         // Logout
         function logout() {
+            console.log('👋 Fazendo logout...');
+
             state.currentUser = null;
             // eslint-disable-next-line no-restricted-globals
             localStorage.removeItem('gps_user');
 
-            // Limpar dados
+            // CRÍTICO: Limpar TODOS os dados
             state.clients = [];
-            state.clientMarkers.forEach(m => state.map.removeLayer(m.marker));
-            state.clientMarkers = [];
+            state.routeData = [];
             state.brDatabase = {};
             state.uploadSessionId = null; // Invalidar sessão de upload
+
+            // Limpar marcadores do mapa
+            if (state.clientMarkers && state.clientMarkers.length > 0) {
+                state.clientMarkers.forEach(m => {
+                    if (state.map && m.marker) {
+                        state.map.removeLayer(m.marker);
+                    }
+                });
+                state.clientMarkers = [];
+            }
+
+            // Limpar polylines de rota
+            if (state.routePolyline && state.map) {
+                state.map.removeLayer(state.routePolyline);
+                state.routePolyline = null;
+            }
+
+            // Limpar lista visual de clientes
+            const clientList = document.getElementById('clientList');
+            if (clientList) {
+                clientList.innerHTML = '';
+            }
+
+            // Atualizar contador
+            updateClientCount();
 
             // Limpar mensagens de status de upload
             const uploadStatus = document.getElementById('uploadStatus');
@@ -2345,16 +2371,55 @@
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Entrar';
             }
+
+            console.log('✅ Logout concluído. Todos os dados limpos.');
         }
 
         // Mostrar aplicação após login
         async function showApp() {
+            console.log(`🔐 Iniciando sessão para usuário: ${state.currentUser.username} (ID: ${state.currentUser.id})`);
+
+            // CRÍTICO: Limpar TODOS os dados do usuário anterior antes de carregar novos dados
+            console.log('🧹 Limpando dados da sessão anterior...');
+
+            // Limpar clientes do estado
+            state.clients = [];
+            state.routeData = [];
+            state.uploadSessionId = null;
+
+            // Limpar todos os marcadores do mapa
+            if (state.clientMarkers && state.clientMarkers.length > 0) {
+                state.clientMarkers.forEach(m => {
+                    if (state.map && m.marker) {
+                        state.map.removeLayer(m.marker);
+                    }
+                });
+                state.clientMarkers = [];
+            }
+
+            // Limpar polylines de rota
+            if (state.routePolyline && state.map) {
+                state.map.removeLayer(state.routePolyline);
+                state.routePolyline = null;
+            }
+
+            // Limpar lista visual de clientes
+            const clientList = document.getElementById('clientList');
+            if (clientList) {
+                clientList.innerHTML = '';
+            }
+
+            // Atualizar contador
+            updateClientCount();
+
             // Limpar mensagens de status de uploads anteriores
             const uploadStatus = document.getElementById('uploadStatus');
             if (uploadStatus) {
                 uploadStatus.textContent = '';
                 uploadStatus.className = 'upload-status';
             }
+
+            console.log('✅ Dados limpos. Carregando dados do usuário atual...');
 
             document.getElementById('loginContainer').classList.add('hidden');
             document.getElementById('registerContainer').classList.add('hidden');
@@ -2385,8 +2450,12 @@
                     }
                 }, 100);
 
+                // Carregar dados APENAS deste usuário
                 await loadClientsFromSupabase();
+                await loadBRDatabaseFromSupabase();
             }
+
+            console.log(`✅ Sessão iniciada com sucesso para ${state.currentUser.username}`);
         }
 
         // ========== GERENCIAMENTO DE USUÁRIOS (ADMIN) ==========
