@@ -1520,6 +1520,10 @@
             <div class="modal-body">
                 <form id="userForm">
                     <div class="form-group">
+                        <label for="newUserName">Nome Completo *</label>
+                        <input type="text" id="newUserName" required placeholder="Digite o nome completo">
+                    </div>
+                    <div class="form-group">
                         <label for="newUsername">Nome de Usuário *</label>
                         <input type="text" id="newUsername" required placeholder="Digite o nome de usuário">
                     </div>
@@ -1552,6 +1556,10 @@
             <div class="modal-body">
                 <form id="editUserForm">
                     <div class="form-group">
+                        <label for="editUserName">Nome Completo *</label>
+                        <input type="text" id="editUserName" required placeholder="Digite o nome completo">
+                    </div>
+                    <div class="form-group">
                         <label for="editUsername">Nome de Usuário *</label>
                         <input type="text" id="editUsername" required placeholder="Digite o nome de usuário">
                     </div>
@@ -1571,6 +1579,22 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="cancelEditUserBtn">Cancelar</button>
                 <button type="submit" form="editUserForm" class="btn btn-primary">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="confirmTitle">Confirmar ação</h2>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage" style="color: var(--text-primary); font-size: 15px; line-height: 1.6;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="confirmCancelBtn">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirmOkBtn">Confirmar</button>
             </div>
         </div>
     </div>
@@ -1656,6 +1680,49 @@
             }
         } catch (error) {
             console.error('Erro ao conectar com Supabase:', error);
+        }
+
+        // ========== FUNÇÃO DE CONFIRMAÇÃO CUSTOMIZADA ==========
+
+        // Substituir confirm() nativo por modal customizado
+        function customConfirm(message, title = 'Confirmar ação') {
+            return new Promise((resolve) => {
+                const confirmModal = document.getElementById('confirmModal');
+                const confirmTitle = document.getElementById('confirmTitle');
+                const confirmMessage = document.getElementById('confirmMessage');
+                const confirmOkBtn = document.getElementById('confirmOkBtn');
+                const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+
+                confirmTitle.textContent = title;
+                confirmMessage.textContent = message;
+                confirmModal.classList.add('active');
+
+                const handleOk = () => {
+                    confirmModal.classList.remove('active');
+                    confirmOkBtn.removeEventListener('click', handleOk);
+                    confirmCancelBtn.removeEventListener('click', handleCancel);
+                    confirmModal.removeEventListener('click', handleOutsideClick);
+                    resolve(true);
+                };
+
+                const handleCancel = () => {
+                    confirmModal.classList.remove('active');
+                    confirmOkBtn.removeEventListener('click', handleOk);
+                    confirmCancelBtn.removeEventListener('click', handleCancel);
+                    confirmModal.removeEventListener('click', handleOutsideClick);
+                    resolve(false);
+                };
+
+                const handleOutsideClick = (e) => {
+                    if (e.target === confirmModal) {
+                        handleCancel();
+                    }
+                };
+
+                confirmOkBtn.addEventListener('click', handleOk);
+                confirmCancelBtn.addEventListener('click', handleCancel);
+                confirmModal.addEventListener('click', handleOutsideClick);
+            });
         }
 
         // Application State
@@ -1831,10 +1898,10 @@
                     <div class="user-card">
                         <div class="user-info">
                             <h3>
-                                ${user.username}
+                                ${user.name || user.username}
                                 ${user.role === 'admin' ? '<span class="user-badge">ADMIN</span>' : ''}
                             </h3>
-                            <p>ID: ${user.id} • Criado em ${new Date(user.created_at).toLocaleDateString('pt-BR')}</p>
+                            <p>Usuário: ${user.username} • ID: ${user.id} • Criado em ${new Date(user.created_at).toLocaleDateString('pt-BR')}</p>
                         </div>
                         <div class="user-actions">
                             <button class="btn btn-secondary" onclick="editUser(${user.id})">✏️ Editar</button>
@@ -1886,13 +1953,13 @@
         }
 
         // Criar usuário (admin)
-        async function createUser(username, password, role) {
+        async function createUser(name, username, password, role) {
             if (!state.useSupabase || state.currentUser.role !== 'admin') return;
 
             try {
                 const { data, error } = await supabase
                     .from('users')
-                    .insert([{ username, password, role }])
+                    .insert([{ name, username, password, role }])
                     .select();
 
                 if (error) throw error;
@@ -1925,6 +1992,7 @@
                 if (error) throw error;
 
                 state.editingUserId = userId;
+                document.getElementById('editUserName').value = data.name || '';
                 document.getElementById('editUsername').value = data.username;
                 document.getElementById('editUserPassword').value = '';
                 document.getElementById('editUserRole').value = data.role || 'user';
@@ -1937,11 +2005,11 @@
         };
 
         // Atualizar usuário
-        async function updateUser(userId, username, password, role) {
+        async function updateUser(userId, name, username, password, role) {
             if (!state.useSupabase || state.currentUser.role !== 'admin') return;
 
             try {
-                const updateData = { username, role };
+                const updateData = { name, username, role };
                 if (password) {
                     updateData.password = password;
                 }
@@ -1968,8 +2036,12 @@
         window.deleteUser = async function(userId, username) {
             if (!state.useSupabase || state.currentUser.role !== 'admin') return;
 
-            // eslint-disable-next-line no-alert
-            if (!confirm(`Tem certeza que deseja excluir o usuário "${username}"?\n\nEsta ação não pode ser desfeita!`)) {
+            const confirmed = await customConfirm(
+                `Tem certeza que deseja excluir o usuário "${username}"?\n\nEsta ação não pode ser desfeita!`,
+                'Excluir Usuário'
+            );
+
+            if (!confirmed) {
                 return;
             }
 
@@ -3397,16 +3469,17 @@
         userForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const name = document.getElementById('newUserName').value.trim();
             const username = document.getElementById('newUsername').value.trim();
             const password = document.getElementById('newUserPassword').value;
             const role = document.getElementById('newUserRole').value;
 
-            if (!username || !password) {
+            if (!name || !username || !password) {
                 showToast('Por favor, preencha todos os campos', 'warning');
                 return;
             }
 
-            const success = await createUser(username, password, role);
+            const success = await createUser(name, username, password, role);
 
             if (success) {
                 addUserModal.classList.remove('active');
@@ -3436,17 +3509,18 @@
         editUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const name = document.getElementById('editUserName').value.trim();
             const username = document.getElementById('editUsername').value.trim();
             const password = document.getElementById('editUserPassword').value;
             const role = document.getElementById('editUserRole').value;
 
-            if (!username) {
-                showToast('Por favor, preencha o nome de usuário', 'warning');
+            if (!name || !username) {
+                showToast('Por favor, preencha o nome completo e nome de usuário', 'warning');
                 return;
             }
 
             if (state.editingUserId) {
-                const success = await updateUser(state.editingUserId, username, password, role);
+                const success = await updateUser(state.editingUserId, name, username, password, role);
 
                 if (success) {
                     editUserModal.classList.remove('active');
