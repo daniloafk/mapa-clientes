@@ -2052,9 +2052,15 @@
         window.deleteUser = async function(userId, username) {
             if (!state.useSupabase || state.currentUser.role !== 'admin') return;
 
+            // Impedir que o admin exclua a si mesmo
+            if (userId === state.currentUser.id) {
+                showToast('Você não pode excluir seu próprio usuário!', 'error');
+                return;
+            }
+
             const confirmed = await customConfirm(
-                `Tem certeza que deseja excluir o usuário "${username}"?\n\nEsta ação não pode ser desfeita!`,
-                'Excluir Usuário'
+                `Tem certeza que deseja excluir o usuário "${username}"?\n\nTODOS os dados serão excluídos:\n- Endereços cadastrados\n- Planilhas carregadas\n- Todas as configurações\n\nEsta ação não pode ser desfeita!`,
+                'Excluir Usuário e Todos os Dados'
             );
 
             if (!confirmed) {
@@ -2062,19 +2068,69 @@
             }
 
             try {
-                const { error } = await supabase
+                console.log(`🗑️ Iniciando exclusão completa do usuário ${userId} (${username})...`);
+                showToast('Excluindo usuário e todos os dados...', 'info');
+
+                // 1. Contar e excluir todos os clientes (endereços) do usuário
+                const { count: clientsCount } = await supabase
+                    .from('clients')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', userId);
+
+                const { error: clientsError } = await supabase
+                    .from('clients')
+                    .delete()
+                    .eq('user_id', userId);
+
+                if (clientsError) {
+                    console.error('Erro ao excluir clientes:', clientsError);
+                    throw new Error(`Erro ao excluir endereços do usuário: ${clientsError.message}`);
+                }
+                console.log(`✅ ${clientsCount || 0} cliente(s)/endereço(s) do usuário ${userId} excluídos`);
+
+                // 2. Contar e excluir todas as planilhas (br_addresses) do usuário
+                const { count: brCount } = await supabase
+                    .from('br_addresses')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', userId);
+
+                const { error: brError } = await supabase
+                    .from('br_addresses')
+                    .delete()
+                    .eq('user_id', userId);
+
+                if (brError) {
+                    console.error('Erro ao excluir planilhas:', brError);
+                    throw new Error(`Erro ao excluir planilhas do usuário: ${brError.message}`);
+                }
+                console.log(`✅ ${brCount || 0} código(s) BR de planilhas do usuário ${userId} excluídos`);
+
+                // 3. Excluir o usuário
+                const { error: userError } = await supabase
                     .from('users')
                     .delete()
                     .eq('id', userId);
 
-                if (error) throw error;
+                if (userError) {
+                    console.error('Erro ao excluir usuário:', userError);
+                    throw new Error(`Erro ao excluir usuário: ${userError.message}`);
+                }
+                console.log(`✅ Usuário ${userId} (${username}) excluído`);
 
-                showToast(`Usuário "${username}" excluído com sucesso!`, 'success');
+                // Mensagem de sucesso com resumo
+                const summary = `Usuário "${username}" excluído com sucesso!\n\n` +
+                    `📊 Resumo:\n` +
+                    `• ${clientsCount || 0} endereço(s)\n` +
+                    `• ${brCount || 0} código(s) BR de planilhas`;
+
+                showToast(summary, 'success');
+                console.log(`\n=== EXCLUSÃO COMPLETA ===\nUsuário: ${username} (ID: ${userId})\nClientes: ${clientsCount || 0}\nPlanilhas: ${brCount || 0}\n========================\n`);
+
                 await loadUsers();
 
             } catch (error) {
-                console.error('Erro ao excluir usuário:', error);
-                showToast('Erro ao excluir usuário', 'error');
+                console.error('Erro ao excluir usuário e dados:', error);
+                showToast(error.message || 'Erro ao excluir usuário e dados', 'error');
             }
         };
 
