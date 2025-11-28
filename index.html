@@ -978,13 +978,6 @@
                 transform: translateX(0);
             }
 
-            /* Ocultar banner de Admin/Sair quando sidebar está aberto */
-            .sidebar.open ~ .user-header-info {
-                opacity: 0;
-                pointer-events: none;
-                transition: opacity 0.3s ease;
-            }
-
             .menu-toggle {
                 display: flex;
                 position: fixed;
@@ -1682,6 +1675,7 @@
             align-items: center;
             gap: 12px;
             flex-wrap: wrap;
+            transition: opacity 0.3s ease;
         }
 
         .user-header-info span {
@@ -4313,12 +4307,23 @@
         menuToggle.addEventListener('click', () => {
             const isOpen = sidebar.classList.toggle('open');
             sidebarOverlay.classList.toggle('active', isOpen);
+            const userHeaderInfo = document.getElementById('userHeaderInfo');
 
             // Previne scroll do body quando sidebar está aberta
             if (isOpen) {
                 document.body.style.overflow = 'hidden';
+                // Oculta o banner de Admin/Sair
+                if (userHeaderInfo) {
+                    userHeaderInfo.style.opacity = '0';
+                    userHeaderInfo.style.pointerEvents = 'none';
+                }
             } else {
                 document.body.style.overflow = '';
+                // Mostra o banner de Admin/Sair
+                if (userHeaderInfo) {
+                    userHeaderInfo.style.opacity = '1';
+                    userHeaderInfo.style.pointerEvents = 'auto';
+                }
             }
         });
 
@@ -4327,6 +4332,12 @@
             sidebar.classList.remove('open');
             sidebarOverlay.classList.remove('active');
             document.body.style.overflow = '';
+            const userHeaderInfo = document.getElementById('userHeaderInfo');
+            // Mostra o banner de Admin/Sair
+            if (userHeaderInfo) {
+                userHeaderInfo.style.opacity = '1';
+                userHeaderInfo.style.pointerEvents = 'auto';
+            }
         });
 
         // Close sidebar when clicking on map (mobile)
@@ -4335,6 +4346,12 @@
                 sidebar.classList.remove('open');
                 sidebarOverlay.classList.remove('active');
                 document.body.style.overflow = '';
+                const userHeaderInfo = document.getElementById('userHeaderInfo');
+                // Mostra o banner de Admin/Sair
+                if (userHeaderInfo) {
+                    userHeaderInfo.style.opacity = '1';
+                    userHeaderInfo.style.pointerEvents = 'auto';
+                }
             }
         });
 
