@@ -4517,28 +4517,51 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
             let failedCount = 0;
             let usedFromSheet = 0;
 
-            console.log(`🗺️ Iniciando geocoding OTIMIZADO de ${routeData.length} endereços (user_id: ${state.currentUser?.id}, session: ${sessionId})...`);
-            console.log(`⚡ Processamento em lote paralelo (5 requisições simultâneas)`);
+            console.log(`🗺️ Iniciando geocoding ULTRA-RÁPIDO de ${routeData.length} endereços (user_id: ${state.currentUser?.id}, session: ${sessionId})...`);
+            console.log(`⚡ Processamento paralelo máximo (15 requisições simultâneas)`);
 
-            // Contar quantas coordenadas já temos da planilha
-            const withCoords = routeData.filter(item => item.latitude && item.longitude).length;
-            console.log(`📊 ${withCoords} endereços já têm coordenadas da planilha (backup)`);
+            // Separar endereços que já têm coordenadas (não precisam geocoding)
+            const needsGeocoding = [];
+            const alreadyHasCoords = [];
 
-            // Processar em lotes de 5 endereços simultaneamente para máxima velocidade
-            const BATCH_SIZE = 5;
-            const DELAY_BETWEEN_BATCHES = 250; // 250ms entre lotes (muito mais rápido)
+            routeData.forEach(item => {
+                if (item.latitude && item.longitude &&
+                    !isNaN(parseFloat(item.latitude)) && !isNaN(parseFloat(item.longitude))) {
+                    // Já tem coordenadas válidas na planilha
+                    alreadyHasCoords.push(item);
+                    item.addressCleaned = cleanAddress(item.address);
+                    usedFromSheet++;
+                } else {
+                    needsGeocoding.push(item);
+                }
+            });
 
-            for (let batchStart = 0; batchStart < routeData.length; batchStart += BATCH_SIZE) {
+            console.log(`📊 ${alreadyHasCoords.length} endereços já têm coordenadas (pulando geocoding)`);
+            console.log(`🔍 ${needsGeocoding.length} endereços precisam de geocoding`);
+
+            // Se todos já têm coordenadas, finalizar imediatamente
+            if (needsGeocoding.length === 0) {
+                console.log(`✅ Todos os endereços já têm coordenadas válidas!`);
+                statusElement.textContent = `✅ ${routeData.length} endereços prontos (usando planilha)`;
+                showToast(`${usedFromSheet} endereços carregados da planilha`, 'success');
+                return;
+            }
+
+            // Processar em lotes de 15 endereços simultaneamente (MÁXIMO DESEMPENHO)
+            const BATCH_SIZE = 15;
+            const DELAY_BETWEEN_BATCHES = 50; // Apenas 50ms entre lotes (ultra-rápido)
+
+            for (let batchStart = 0; batchStart < needsGeocoding.length; batchStart += BATCH_SIZE) {
                 // Verificar se esta sessão ainda é válida
                 if (state.uploadSessionId !== sessionId) {
                     console.log(`⚠️ Sessão de upload cancelada ou substituída. Parando geocoding.`);
                     return;
                 }
 
-                const batchEnd = Math.min(batchStart + BATCH_SIZE, routeData.length);
-                const batch = routeData.slice(batchStart, batchEnd);
+                const batchEnd = Math.min(batchStart + BATCH_SIZE, needsGeocoding.length);
+                const batch = needsGeocoding.slice(batchStart, batchEnd);
 
-                // Processar lote em paralelo
+                // Processar lote em paralelo (todas as 15 requisições ao mesmo tempo)
                 const promises = batch.map(async (item, batchIndex) => {
                     const globalIndex = batchStart + batchIndex;
 
@@ -4553,24 +4576,14 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                             item.geocodedAddress = geocoded.displayName;
                             item.addressCleaned = cleanAddress(item.address);
                             successCount++;
-                            console.log(`✅ [${globalIndex + 1}/${routeData.length}] ${item.addressCleaned}`);
+                            console.log(`✅ [${globalIndex + 1}/${needsGeocoding.length}] ${item.addressCleaned}`);
                         } else {
-                            // Se falhou mas tem coordenadas da planilha, usar elas
-                            if (item.latitude && item.longitude) {
-                                console.log(`📋 [${globalIndex + 1}/${routeData.length}] Usando planilha: ${item.address}`);
-                                usedFromSheet++;
-                            } else {
-                                console.error(`❌ [${globalIndex + 1}/${routeData.length}] Falha: ${item.address}`);
-                                failedCount++;
-                            }
-                        }
-                    } catch (error) {
-                        console.error(`❌ [${globalIndex + 1}/${routeData.length}] Erro: ${item.address}`, error);
-                        if (item.latitude && item.longitude) {
-                            usedFromSheet++;
-                        } else {
+                            console.error(`❌ [${globalIndex + 1}/${needsGeocoding.length}] Falha: ${item.address}`);
                             failedCount++;
                         }
+                    } catch (error) {
+                        console.error(`❌ [${globalIndex + 1}/${needsGeocoding.length}] Erro: ${item.address}`, error);
+                        failedCount++;
                     }
                 });
 
@@ -4578,19 +4591,20 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                 await Promise.all(promises);
 
                 // Atualizar progresso
-                const processed = Math.min(batchEnd, routeData.length);
+                const processed = Math.min(batchEnd, needsGeocoding.length);
+                const totalProcessed = alreadyHasCoords.length + processed;
                 const userInfo = state.currentUser ? ` [${state.currentUser.username}]` : '';
-                statusElement.textContent = `Geocoding${userInfo}... ${processed}/${routeData.length} (✅ ${successCount} | ❌ ${failedCount} | 📋 ${usedFromSheet})`;
+                statusElement.textContent = `Geocoding${userInfo}... ${totalProcessed}/${routeData.length} (✅ ${successCount} | ❌ ${failedCount} | 📋 ${usedFromSheet})`;
 
-                // Delay curto entre lotes
-                if (batchEnd < routeData.length) {
+                // Delay mínimo entre lotes
+                if (batchEnd < needsGeocoding.length) {
                     await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
                 }
             }
 
             console.log(`\n=== RESUMO DO GEOCODING ===`);
             console.log(`✅ ${successCount} endereços geocodificados com sucesso`);
-            console.log(`📋 ${usedFromSheet} endereços usando coordenadas da planilha (fallback)`);
+            console.log(`📋 ${usedFromSheet} endereços usando coordenadas da planilha`);
             console.log(`❌ ${failedCount} endereços falharam completamente`);
             console.log(`📍 Total processado: ${routeData.length}`);
 
