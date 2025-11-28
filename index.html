@@ -2348,7 +2348,10 @@
             }
 
             // Atualizar contador
-            updateClientCount();
+            const countElement = document.getElementById('clientCount');
+            if (countElement) {
+                countElement.textContent = '0 clientes cadastrados';
+            }
 
             // Limpar mensagens de status de upload
             const uploadStatus = document.getElementById('uploadStatus');
@@ -2410,7 +2413,10 @@
             }
 
             // Atualizar contador
-            updateClientCount();
+            const countElement = document.getElementById('clientCount');
+            if (countElement) {
+                countElement.textContent = '0 clientes cadastrados';
+            }
 
             // Limpar mensagens de status de uploads anteriores
             const uploadStatus = document.getElementById('uploadStatus');
