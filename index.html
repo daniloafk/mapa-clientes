@@ -993,27 +993,30 @@
 
             /* FAB Mobile - Botão de Adicionar Cliente */
             .fab {
-                /* Safe area para dispositivos com notch (iPhone X+) */
-                bottom: max(20px, calc(env(safe-area-inset-bottom) + 10px));
+                /* Posição mais alta para garantir visibilidade */
+                bottom: 80px !important;
                 width: 64px;
                 height: 64px;
                 font-size: 32px;
-                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
                 z-index: 1400;
                 /* Garante visibilidade total */
                 margin-bottom: 0;
                 pointer-events: auto;
+                position: fixed;
+                left: 50%;
+                transform: translateX(-50%);
             }
 
             /* Garantir que FAB não seja cortado no active */
             .fab:active {
-                transform: translateX(-50%) scale(0.92);
+                transform: translateX(-50%) scale(0.92) !important;
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             }
 
             /* Impede hover em mobile para melhor performance */
             .fab:hover {
-                transform: translateX(-50%);
+                transform: translateX(-50%) !important;
             }
 
             /* Toast Mobile */
@@ -1364,7 +1367,7 @@
                 width: 60px;
                 height: 60px;
                 font-size: 28px;
-                bottom: max(16px, env(safe-area-inset-bottom));
+                bottom: 70px !important;
             }
         }
 
@@ -1384,9 +1387,9 @@
             }
 
             .fab {
-                bottom: max(15px, env(safe-area-inset-bottom));
-                width: 56px;
-                height: 56px;
+                bottom: 80px !important;
+                width: 60px;
+                height: 60px;
                 font-size: 28px;
             }
         }
