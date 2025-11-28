@@ -978,6 +978,13 @@
                 transform: translateX(0);
             }
 
+            /* Ocultar banner de Admin/Sair quando sidebar está aberto */
+            .sidebar.open ~ .user-header-info {
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.3s ease;
+            }
+
             .menu-toggle {
                 display: flex;
                 position: fixed;
