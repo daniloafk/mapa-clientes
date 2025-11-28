@@ -2459,6 +2459,7 @@
                 // Carregar dados APENAS deste usuário
                 await loadClientsFromSupabase();
                 await loadBRDatabaseFromSupabase();
+                await loadRouteDataFromSupabase();
             }
 
             console.log(`✅ Sessão iniciada com sucesso para ${state.currentUser.username}`);
@@ -2789,6 +2790,9 @@
             // Load BR database from Supabase
             await loadBRDatabaseFromSupabase();
 
+            // Load route data from Supabase
+            await loadRouteDataFromSupabase();
+
             hideLoading();
         }
 
@@ -2939,6 +2943,108 @@
             } catch (error) {
                 console.error('Erro ao salvar banco de dados BR:', error);
                 showToast('Erro ao salvar códigos BR no banco de dados', 'error');
+            }
+        }
+
+        // Salvar dados de roteirização no Supabase
+        async function saveRouteDataToSupabase(routeData) {
+            if (!state.useSupabase || !state.currentUser) return;
+
+            try {
+                // Limpar dados antigos APENAS deste usuário
+                const { error: deleteError } = await supabase
+                    .from('route_data')
+                    .delete()
+                    .eq('user_id', state.currentUser.id);
+
+                if (deleteError) throw deleteError;
+
+                // Inserir novos dados com user_id
+                const records = routeData.map(item => ({
+                    user_id: state.currentUser.id,
+                    sequence: item.sequence,
+                    stop: item.stop,
+                    spx_tn: item.spxTn,
+                    address: item.address,
+                    address_original: item.addressOriginal,
+                    address_cleaned: item.addressCleaned || '',
+                    bairro: item.bairro || '',
+                    city: item.city || '',
+                    zipcode: item.zipcode || '',
+                    latitude: item.latitude,
+                    longitude: item.longitude,
+                    geocoded_address: item.geocodedAddress || '',
+                    packages: JSON.stringify(item.packages || [item.spxTn]),
+                    sequences: JSON.stringify(item.sequences || [item.sequence]),
+                    package_count: item.packageCount || 1
+                }));
+
+                if (records.length > 0) {
+                    const { error: insertError } = await supabase
+                        .from('route_data')
+                        .insert(records);
+
+                    if (insertError) throw insertError;
+
+                    console.log(`✅ ${records.length} registro(s) de rota salvos no Supabase (user_id: ${state.currentUser.id})`);
+                }
+            } catch (error) {
+                console.error('Erro ao salvar dados de rota:', error);
+                showToast('Erro ao salvar dados de roteirização no banco de dados', 'error');
+            }
+        }
+
+        // Carregar dados de roteirização do Supabase
+        async function loadRouteDataFromSupabase() {
+            if (!state.useSupabase || !state.currentUser) return;
+
+            try {
+                const { data, error } = await supabase
+                    .from('route_data')
+                    .select('*')
+                    .eq('user_id', state.currentUser.id)
+                    .order('sequence', { ascending: true });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    state.routeData = data.map(item => ({
+                        sequence: item.sequence,
+                        stop: item.stop,
+                        spxTn: item.spx_tn,
+                        address: item.address,
+                        addressOriginal: item.address_original,
+                        addressCleaned: item.address_cleaned,
+                        bairro: item.bairro,
+                        city: item.city,
+                        zipcode: item.zipcode,
+                        latitude: item.latitude,
+                        longitude: item.longitude,
+                        geocodedAddress: item.geocoded_address,
+                        packages: JSON.parse(item.packages || '[]'),
+                        sequences: JSON.parse(item.sequences || '[]'),
+                        packageCount: item.package_count
+                    }));
+
+                    console.log(`✅ ${state.routeData.length} registro(s) de rota carregados do Supabase`);
+
+                    // Mostrar botão de roteirização se tiver dados
+                    if (state.routeData.length > 0) {
+                        document.getElementById('optimizeRouteBtn').style.display = 'block';
+                        const totalPackages = state.routeData.reduce((sum, item) => sum + item.packageCount, 0);
+                        const uploadStatus = document.getElementById('uploadStatus');
+                        if (uploadStatus) {
+                            uploadStatus.textContent = `✓ ${state.routeData.length} endereços, ${totalPackages} pacotes carregados`;
+                            uploadStatus.className = 'upload-status success';
+                        }
+                    }
+                } else {
+                    state.routeData = [];
+                    document.getElementById('optimizeRouteBtn').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dados de rota:', error);
+                state.routeData = [];
             }
         }
 
@@ -4830,6 +4936,7 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                     // Salvar no Supabase
                     uploadStatus.textContent = 'Salvando no banco de dados...';
                     await saveBRDatabaseToSupabase(state.brDatabase);
+                    await saveRouteDataToSupabase(state.routeData);
 
                     const totalPackages = state.routeData.reduce((sum, item) => sum + item.packageCount, 0);
                     uploadStatus.textContent = `✓ ${count} códigos BR carregados! ${state.routeData.length} endereços, ${totalPackages} pacotes.`;
