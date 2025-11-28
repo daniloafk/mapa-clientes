@@ -2311,7 +2311,7 @@
                     });
 
                     updateClientsList();
-                    console.log(`✅ ${data.length} cliente(s) carregado(s) do Supabase`);
+                    console.log(`✅ ${data.length} cliente(s) carregado(s) do Supabase (user_id: ${state.currentUser.id}) - ISOLAMENTO ATIVO`);
                 }
             } catch (error) {
                 console.error('Erro ao carregar clientes:', error);
@@ -2321,6 +2321,12 @@
 
         // Add Client
         async function addClient(name, address, lat, lng, br = '', phone = '') {
+            // Verificar se o usuário está logado
+            if (!state.currentUser || !state.currentUser.id) {
+                showToast('Erro: Usuário não autenticado', 'error');
+                return;
+            }
+
             const client = {
                 name,
                 address,
@@ -2356,7 +2362,7 @@
                     client.br = data[0].br || '';
                     client.phone = data[0].phone || '';
 
-                    console.log('✅ Cliente salvo no Supabase');
+                    console.log(`✅ Cliente salvo no Supabase (user_id: ${state.currentUser.id})`);
                 } catch (error) {
                     console.error('Erro ao salvar cliente:', error);
 
@@ -2972,6 +2978,12 @@
             const client = state.clients.find(c => c.id === clientId);
             if (!client) return;
 
+            // Verificar se o usuário está logado
+            if (!state.currentUser || !state.currentUser.id) {
+                showToast('Erro: Usuário não autenticado', 'error');
+                return;
+            }
+
             if (state.useSupabase) {
                 try {
                     const { error } = await supabase
@@ -2982,11 +2994,12 @@
                             br: newBR,
                             phone: newPhone
                         })
-                        .eq('id', clientId);
+                        .eq('id', clientId)
+                        .eq('user_id', state.currentUser.id);
 
                     if (error) throw error;
 
-                    console.log('✅ Cliente atualizado no Supabase');
+                    console.log(`✅ Cliente atualizado no Supabase (user_id: ${state.currentUser.id})`);
                 } catch (error) {
                     console.error('Erro ao atualizar cliente:', error);
 
@@ -3031,16 +3044,23 @@
 
         // Delete Client
         window.deleteClient = async function(clientId) {
+            // Verificar se o usuário está logado
+            if (!state.currentUser || !state.currentUser.id) {
+                showToast('Erro: Usuário não autenticado', 'error');
+                return;
+            }
+
             if (state.useSupabase) {
                 try {
                     const { error } = await supabase
                         .from('clients')
                         .delete()
-                        .eq('id', clientId);
+                        .eq('id', clientId)
+                        .eq('user_id', state.currentUser.id);
 
                     if (error) throw error;
 
-                    console.log('✅ Cliente excluído do Supabase');
+                    console.log(`✅ Cliente excluído do Supabase (user_id: ${state.currentUser.id})`);
                 } catch (error) {
                     console.error('Erro ao excluir cliente:', error);
                     showToast('Erro ao excluir cliente do banco de dados', 'error');
