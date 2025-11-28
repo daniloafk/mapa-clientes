@@ -1823,6 +1823,7 @@
             state.clientMarkers.forEach(m => state.map.removeLayer(m.marker));
             state.clientMarkers = [];
             state.brDatabase = {};
+            state.uploadSessionId = null; // Invalidar sessão de upload
 
             // Limpar mensagens de status de upload
             const uploadStatus = document.getElementById('uploadStatus');
@@ -3747,6 +3748,7 @@
 
         // State for route optimization
         state.routeData = [];  // Armazena dados da planilha para roteirização
+        state.uploadSessionId = null; // ID único da sessão de upload atual
         state.optimizedRoute = null;  // Rota otimizada pela IA
         state.routePolylines = [];  // Polylines da rota otimizada
 
@@ -3901,12 +3903,12 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
         }
 
         // Geocode all addresses usando Nominatim - Funciona em QUALQUER ambiente web
-        async function geocodeAllAddresses(routeData, statusElement) {
+        async function geocodeAllAddresses(routeData, statusElement, sessionId) {
             let successCount = 0;
             let failedCount = 0;
             let usedFromSheet = 0;
 
-            console.log(`🗺️ Iniciando geocoding de ${routeData.length} endereços...`);
+            console.log(`🗺️ Iniciando geocoding de ${routeData.length} endereços (user_id: ${state.currentUser?.id}, session: ${sessionId})...`);
             console.log(`⚠️ Usando Nominatim (OpenStreetMap) - Respeitando limite de 1 req/seg`);
 
             // Contar quantas coordenadas já temos da planilha
@@ -3915,9 +3917,17 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
 
             // Processar endereços UM POR VEZ (Nominatim exige max 1 req/seg)
             for (let i = 0; i < routeData.length; i++) {
+                // Verificar se esta sessão ainda é válida (usuário não fez logout ou novo upload)
+                if (state.uploadSessionId !== sessionId) {
+                    console.log(`⚠️ Sessão de upload cancelada ou substituída. Parando geocoding.`);
+                    return;
+                }
+
                 const item = routeData[i];
 
-                statusElement.textContent = `Geocoding... ${i + 1}/${routeData.length} (✅ ${successCount} | ❌ ${failedCount} | 📋 ${usedFromSheet})`;
+                // Mostrar progresso com identificação do usuário
+                const userInfo = state.currentUser ? ` [${state.currentUser.username}]` : '';
+                statusElement.textContent = `Geocoding${userInfo}... ${i + 1}/${routeData.length} (✅ ${successCount} | ❌ ${failedCount} | 📋 ${usedFromSheet})`;
 
                 try {
                     // Fazer geocoding do endereço
@@ -3997,6 +4007,10 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                 return;
             }
 
+            // Gerar ID único para esta sessão de upload
+            const sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            state.uploadSessionId = sessionId;
+
             uploadStatus.textContent = 'Processando planilha...';
             uploadStatus.className = 'upload-status';
 
@@ -4075,7 +4089,7 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                 if (count > 0) {
                     // Fazer geocoding de todos os endereços (IGNORA coordenadas da planilha)
                     uploadStatus.textContent = 'Buscando coordenadas precisas dos endereços...';
-                    await geocodeAllAddresses(state.routeData, uploadStatus);
+                    await geocodeAllAddresses(state.routeData, uploadStatus, sessionId);
 
                     // Filtrar apenas endereços que foram geocodificados com sucesso
                     const validRouteData = state.routeData.filter(item =>
