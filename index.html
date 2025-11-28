@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#2563eb">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -51,6 +51,8 @@
             color: var(--text-primary);
             overflow: hidden;
             height: 100vh;
+            /* Safe area for devices with notch */
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
 
         .app-container {
@@ -279,7 +281,7 @@
         /* Floating Action Button */
         .fab {
             position: fixed;
-            bottom: 15px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
             width: 60px;
@@ -294,8 +296,12 @@
             align-items: center;
             justify-content: center;
             font-size: 28px;
+            font-weight: 300;
+            line-height: 1;
             transition: all 0.3s;
             z-index: 1000;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .fab:hover {
@@ -985,12 +991,29 @@
                 min-height: 48px;
             }
 
-            /* FAB Mobile */
+            /* FAB Mobile - Botão de Adicionar Cliente */
             .fab {
-                bottom: 20px;
-                width: 56px;
-                height: 56px;
-                font-size: 24px;
+                /* Safe area para dispositivos com notch (iPhone X+) */
+                bottom: max(20px, calc(env(safe-area-inset-bottom) + 10px));
+                width: 64px;
+                height: 64px;
+                font-size: 32px;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+                z-index: 1400;
+                /* Garante visibilidade total */
+                margin-bottom: 0;
+                pointer-events: auto;
+            }
+
+            /* Garantir que FAB não seja cortado no active */
+            .fab:active {
+                transform: translateX(-50%) scale(0.92);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            }
+
+            /* Impede hover em mobile para melhor performance */
+            .fab:hover {
+                transform: translateX(-50%);
             }
 
             /* Toast Mobile */
@@ -1335,6 +1358,14 @@
                 font-size: 13px;
                 padding: 8px 14px;
             }
+
+            /* FAB em telas muito pequenas */
+            .fab {
+                width: 60px;
+                height: 60px;
+                font-size: 28px;
+                bottom: max(16px, env(safe-area-inset-bottom));
+            }
         }
 
         /* Landscape Mobile */
@@ -1350,6 +1381,13 @@
             .sidebar {
                 width: 60vw;
                 max-width: 400px;
+            }
+
+            .fab {
+                bottom: max(15px, env(safe-area-inset-bottom));
+                width: 56px;
+                height: 56px;
+                font-size: 28px;
             }
         }
 
