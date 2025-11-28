@@ -1822,6 +1822,14 @@
             state.clients = [];
             state.clientMarkers.forEach(m => state.map.removeLayer(m.marker));
             state.clientMarkers = [];
+            state.brDatabase = {};
+
+            // Limpar mensagens de status de upload
+            const uploadStatus = document.getElementById('uploadStatus');
+            if (uploadStatus) {
+                uploadStatus.textContent = '';
+                uploadStatus.className = 'upload-status';
+            }
 
             // Esconder app e mostrar login
             document.getElementById('appContainer').style.display = 'none';
@@ -2225,6 +2233,8 @@
 
                 if (error) throw error;
 
+                const uploadStatus = document.getElementById('uploadStatus');
+
                 if (data && data.length > 0) {
                     state.brDatabase = {};
                     data.forEach(item => {
@@ -2232,12 +2242,24 @@
                     });
                     console.log(`✅ ${data.length} código(s) BR carregado(s) do Supabase (user_id: ${state.currentUser.id}) - ISOLAMENTO ATIVO`);
 
-                    const uploadStatus = document.getElementById('uploadStatus');
                     uploadStatus.textContent = `✓ ${data.length} códigos BR carregados!`;
                     uploadStatus.className = 'upload-status success';
+                } else {
+                    // Limpar mensagem se o usuário não tem dados
+                    state.brDatabase = {};
+                    uploadStatus.textContent = '';
+                    uploadStatus.className = 'upload-status';
+                    console.log(`📊 Nenhuma planilha encontrada para este usuário (user_id: ${state.currentUser.id})`);
                 }
             } catch (error) {
                 console.error('Erro ao carregar banco de dados BR:', error);
+                // Limpar mensagem em caso de erro
+                const uploadStatus = document.getElementById('uploadStatus');
+                if (uploadStatus) {
+                    uploadStatus.textContent = '';
+                    uploadStatus.className = 'upload-status';
+                }
+                state.brDatabase = {};
                 // Não mostra toast, pois pode ser que a tabela ainda não exista
             }
         }
