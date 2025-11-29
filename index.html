@@ -2243,7 +2243,8 @@
             currentRoute: null, // Rota atual
             viewingOptimizedRoute: false, // Flag para indicar que está visualizando rota otimizada
             currentUser: null, // Usuário logado
-            editingUserId: null // ID do usuário sendo editado
+            editingUserId: null, // ID do usuário sendo editado
+            syncPollingInterval: null // Interval para sincronização automática (polling)
         };
 
         // ========== SISTEMA DE AUTENTICAÇÃO ==========
@@ -2324,6 +2325,13 @@
             state.routeData = [];
             state.brDatabase = {};
             state.uploadSessionId = null; // Invalidar sessão de upload
+
+            // Cancelar sincronização automática
+            if (state.syncPollingInterval) {
+                clearInterval(state.syncPollingInterval);
+                state.syncPollingInterval = null;
+                console.log('🔕 Sincronização automática desativada');
+            }
 
             // Limpar marcadores do mapa
             if (state.clientMarkers && state.clientMarkers.length > 0) {
@@ -2460,6 +2468,9 @@
                 await loadClientsFromSupabase();
                 await loadBRDatabaseFromSupabase();
                 await loadRouteDataFromSupabase();
+
+                // Configurar sincronização em tempo real
+                setupRealtimeSubscription();
             }
 
             console.log(`✅ Sessão iniciada com sucesso para ${state.currentUser.username}`);
@@ -2793,6 +2804,9 @@
             // Load route data from Supabase
             await loadRouteDataFromSupabase();
 
+            // Configurar sincronização em tempo real
+            setupRealtimeSubscription();
+
             hideLoading();
         }
 
@@ -3045,6 +3059,143 @@
             } catch (error) {
                 console.error('Erro ao carregar dados de rota:', error);
                 state.routeData = [];
+            }
+        }
+
+        // Configurar sincronização automática com POLLING (mais confiável)
+        function setupRealtimeSubscription() {
+            if (!state.useSupabase || !state.currentUser) return;
+
+            // Cancelar polling anterior se existir
+            if (state.syncPollingInterval) {
+                clearInterval(state.syncPollingInterval);
+                state.syncPollingInterval = null;
+            }
+
+            console.log(`🔄 Configurando sincronização automática (polling) para user_id: ${state.currentUser.id}`);
+
+            // Verificar mudanças a cada 0.5 segundos (ultra-rápido)
+            state.syncPollingInterval = setInterval(async () => {
+                await checkForClientChanges();
+            }, 500); // 0.5 segundos
+
+            console.log('✅ Sincronização automática ativada! (verificando a cada 0.5s)');
+        }
+
+        // Verificar mudanças nos clientes
+        async function checkForClientChanges() {
+            if (!state.useSupabase || !state.currentUser) return;
+
+            try {
+                // Buscar clientes do servidor
+                const { data, error } = await supabase
+                    .from('clients')
+                    .select('*')
+                    .eq('user_id', state.currentUser.id)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                const serverClients = data || [];
+
+                // Converter para formato do cliente
+                const serverClientsMap = {};
+                serverClients.forEach(client => {
+                    serverClientsMap[client.id] = {
+                        id: client.id,
+                        name: client.name,
+                        address: client.address,
+                        lat: client.latitude,
+                        lng: client.longitude,
+                        br: client.br || '',
+                        phone: client.phone || '',
+                        date: client.created_at
+                    };
+                });
+
+                // IDs dos clientes locais e do servidor
+                const localIds = new Set(state.clients.map(c => c.id));
+                const serverIds = new Set(serverClients.map(c => c.id));
+
+                // Detectar NOVOS clientes (no servidor mas não local)
+                serverIds.forEach(id => {
+                    if (!localIds.has(id)) {
+                        const newClient = serverClientsMap[id];
+                        state.clients.push(newClient);
+                        addClientMarker(newClient);
+                        updateClientsList();
+                        showToast(`✨ Novo cliente: ${newClient.name}`, 'success');
+                        console.log('✅ Cliente adicionado via sync:', newClient.name);
+                    }
+                });
+
+                // Detectar clientes REMOVIDOS (local mas não no servidor)
+                const clientsToRemove = [];
+                state.clients.forEach((client, index) => {
+                    if (!serverIds.has(client.id)) {
+                        clientsToRemove.push({ client, index });
+                    }
+                });
+
+                // Remover clientes deletados (do fim para o início)
+                clientsToRemove.reverse().forEach(({ client, index }) => {
+                    // Remover do state
+                    state.clients.splice(index, 1);
+
+                    // Remover marcador do mapa
+                    const markerObj = state.clientMarkers.find(m => m.id === client.id);
+                    if (markerObj && state.map) {
+                        state.map.removeLayer(markerObj.marker);
+                        const markerIndex = state.clientMarkers.findIndex(m => m.id === client.id);
+                        if (markerIndex !== -1) {
+                            state.clientMarkers.splice(markerIndex, 1);
+                        }
+                    }
+
+                    updateClientsList();
+                    showToast(`🗑️ Cliente removido: ${client.name}`, 'warning');
+                    console.log('🗑️ Cliente deletado via sync:', client.name);
+                });
+
+                // Detectar clientes ATUALIZADOS
+                state.clients.forEach((localClient, index) => {
+                    if (serverIds.has(localClient.id)) {
+                        const serverClient = serverClientsMap[localClient.id];
+
+                        // Verificar se houve mudanças
+                        const hasChanges =
+                            localClient.name !== serverClient.name ||
+                            localClient.address !== serverClient.address ||
+                            localClient.lat !== serverClient.lat ||
+                            localClient.lng !== serverClient.lng ||
+                            localClient.br !== serverClient.br ||
+                            localClient.phone !== serverClient.phone;
+
+                        if (hasChanges) {
+                            // Atualizar no state
+                            state.clients[index] = serverClient;
+
+                            // Atualizar marcador no mapa
+                            const markerObj = state.clientMarkers.find(m => m.id === serverClient.id);
+                            if (markerObj && state.map) {
+                                state.map.removeLayer(markerObj.marker);
+                                const markerIndex = state.clientMarkers.findIndex(m => m.id === serverClient.id);
+                                if (markerIndex !== -1) {
+                                    state.clientMarkers.splice(markerIndex, 1);
+                                }
+                                addClientMarker(serverClient);
+                            }
+
+                            updateClientsList();
+                            showToast(`🔄 Cliente atualizado: ${serverClient.name}`, 'info');
+                            console.log('🔄 Cliente atualizado via sync:', serverClient.name);
+                        }
+                    }
+                });
+
+            } catch (error) {
+                // Silencioso - não mostrar erro para o usuário (polling em background)
+                console.error('Erro na sincronização automática:', error);
             }
         }
 
