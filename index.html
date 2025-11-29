@@ -2960,7 +2960,7 @@
                 zoomSnap: 1,
                 zoomDelta: 1,
                 wheelPxPerZoomLevel: 60
-            }).setView([lat, lng], isMobile ? 19 : 18);
+            }).setView([lat, lng], isMobile ? 17 : 16);
 
             // Criar layers de Google Maps com máxima qualidade
             const googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
@@ -3842,7 +3842,7 @@
             }
 
             const latlng = state.currentLocationMarker.getLatLng();
-            state.map.setView(latlng, 19, {
+            state.map.setView(latlng, 17, {
                 animate: true,
                 duration: 0.5
             });
@@ -6419,7 +6419,7 @@ Retorne a ordem otimizada:`;
                     console.log('📍 Ajustando visualização para mostrar rota otimizada');
                     state.map.fitBounds(bounds, {
                         padding: isMobile ? [50, 50] : [100, 100],
-                        maxZoom: isMobile ? 17 : 18,
+                        maxZoom: isMobile ? 16 : 17,
                         animate: true,
                         duration: 1.0
                     });
