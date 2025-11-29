@@ -2805,10 +2805,12 @@
                 zoomDelta: 0.5
             }).setView([lat, lng], isMobile ? 17 : 16);
 
-            // Add tile layer com alta qualidade para mobile
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19,
+            // Add tile layer CartoDB Voyager (estilo moderno similar ao Google Maps)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20,
+                minZoom: 1,
                 updateWhenIdle: false,  // Atualizar tiles em tempo real para melhor experiência
                 updateWhenZooming: true,  // Atualizar durante zoom para melhor qualidade
                 keepBuffer: 2,  // Buffer adequado para transições suaves
