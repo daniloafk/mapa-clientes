@@ -6012,7 +6012,7 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
                             processOptimizedRoute(optimizedOrder);
                             routeStatus.textContent = `✓ Rota otimizada com IA! ${optimizedOrder.length} paradas.`;
                             routeStatus.className = 'upload-status success';
-                            showToast(`Rota otimizada com IA! ${optimizedOrder.length} paradas.`, 'success');
+                            // showToast(`Rota otimizada com IA! ${optimizedOrder.length} paradas.`, 'success');
                         } else {
                             throw new Error('Resposta da IA não contém JSON válido');
                         }
@@ -6041,11 +6041,28 @@ INSTRUÇÕES:
 
 Retorne a ordem otimizada:`;
 
-            await window.Poe.sendUserMessage(`@Claude-Sonnet-4.5 ${prompt}`, {
-                handler: "route-optimizer",
-                stream: false,
-                openChat: false
-            });
+            try {
+                await window.Poe.sendUserMessage(`@Claude-Sonnet-4.5 ${prompt}`, {
+                    handler: "route-optimizer",
+                    stream: false,
+                    openChat: false
+                });
+            } catch (error) {
+                // Tratar erros do Poe API (ex: usuário rejeitou confirmação)
+                console.error('Erro ao enviar mensagem para Poe API:', error);
+
+                if (error.errorType === 'USER_REJECTED_CONFIRMATION') {
+                    routeStatus.textContent = '❌ Operação cancelada';
+                    showToast('Roteirização cancelada pelo usuário', 'warning');
+                } else {
+                    routeStatus.textContent = '❌ Erro ao conectar com IA';
+                    showToast('Erro ao conectar com IA: ' + error.message, 'error');
+                }
+
+                routeStatus.className = 'upload-status';
+                optimizeRouteBtn.disabled = false;
+                throw error; // Re-throw para o catch externo capturar
+            }
         }
 
         // Optimize Route Locally (Nearest Neighbor Algorithm)
