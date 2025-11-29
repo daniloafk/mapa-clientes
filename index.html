@@ -2244,7 +2244,9 @@
             viewingOptimizedRoute: false, // Flag para indicar que está visualizando rota otimizada
             currentUser: null, // Usuário logado
             editingUserId: null, // ID do usuário sendo editado
-            syncPollingInterval: null // Interval para sincronização automática (polling)
+            syncPollingInterval: null, // Interval para sincronização automática (polling)
+            deliveredStops: new Set(), // Set de índices das paradas entregues
+            optimizedOrder: null // Ordem otimizada atual das paradas
         };
 
         // ========== SISTEMA DE AUTENTICAÇÃO ==========
@@ -2325,6 +2327,7 @@
             state.routeData = [];
             state.brDatabase = {};
             state.uploadSessionId = null; // Invalidar sessão de upload
+            state.deliveredStops.clear(); // Limpar status de entrega
 
             // Cancelar sincronização automática
             if (state.syncPollingInterval) {
@@ -3052,6 +3055,9 @@
                             uploadStatus.className = 'upload-status success';
                         }
 
+                        // Carregar status de entrega
+                        await loadDeliveryStatusFromSupabase();
+
                         // Carregar e restaurar rota otimizada se existir
                         const optimizedRoute = await loadOptimizedRouteFromSupabase();
                         if (optimizedRoute && optimizedRoute.length > 0) {
@@ -3139,6 +3145,410 @@
                 console.error('Erro ao carregar rota otimizada:', error);
                 return null;
             }
+        }
+
+        // ========== SISTEMA DE STATUS DE ENTREGA ==========
+
+        // Marcar parada como entregue
+        async function markStopAsDelivered(stopIndex, stopData) {
+            if (!state.useSupabase || !state.currentUser) {
+                // Modo offline - apenas atualizar visualmente
+                state.deliveredStops.add(stopIndex);
+                updateRouteMarkers();
+                showToast('✅ Parada marcada como entregue', 'success');
+                return;
+            }
+
+            try {
+                // Verificar se já existe registro
+                const { data: existing, error: checkError } = await supabase
+                    .from('delivery_status')
+                    .select('*')
+                    .eq('user_id', state.currentUser.id)
+                    .eq('stop_index', stopIndex)
+                    .single();
+
+                if (checkError && checkError.code !== 'PGRST116') {
+                    throw checkError;
+                }
+
+                if (existing) {
+                    // Atualizar registro existente
+                    const { error: updateError } = await supabase
+                        .from('delivery_status')
+                        .update({
+                            is_delivered: true,
+                            delivered_at: new Date().toISOString()
+                        })
+                        .eq('id', existing.id);
+
+                    if (updateError) throw updateError;
+                } else {
+                    // Criar novo registro
+                    const { error: insertError } = await supabase
+                        .from('delivery_status')
+                        .insert([{
+                            user_id: state.currentUser.id,
+                            stop_index: stopIndex,
+                            stop_address: stopData.address,
+                            stop_latitude: stopData.latitude,
+                            stop_longitude: stopData.longitude,
+                            is_delivered: true,
+                            delivered_at: new Date().toISOString()
+                        }]);
+
+                    if (insertError) throw insertError;
+                }
+
+                // Atualizar estado local
+                state.deliveredStops.add(stopIndex);
+                updateRouteMarkers();
+                showToast('✅ Parada marcada como entregue', 'success');
+                console.log(`✅ Parada ${stopIndex} marcada como entregue no Supabase`);
+            } catch (error) {
+                console.error('Erro ao marcar parada como entregue:', error);
+                showToast('Erro ao salvar status de entrega', 'error');
+            }
+        }
+
+        // Desmarcar parada como entregue
+        async function unmarkStopAsDelivered(stopIndex) {
+            if (!state.useSupabase || !state.currentUser) {
+                // Modo offline - apenas atualizar visualmente
+                state.deliveredStops.delete(stopIndex);
+                updateRouteMarkers();
+                showToast('↩️ Entrega desfeita', 'info');
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('delivery_status')
+                    .update({
+                        is_delivered: false,
+                        delivered_at: null
+                    })
+                    .eq('user_id', state.currentUser.id)
+                    .eq('stop_index', stopIndex);
+
+                if (error) throw error;
+
+                // Atualizar estado local
+                state.deliveredStops.delete(stopIndex);
+                updateRouteMarkers();
+                showToast('↩️ Entrega desfeita', 'info');
+                console.log(`↩️ Parada ${stopIndex} desmarcada no Supabase`);
+            } catch (error) {
+                console.error('Erro ao desmarcar parada:', error);
+                showToast('Erro ao desfazer entrega', 'error');
+            }
+        }
+
+        // Carregar status de entrega do Supabase
+        async function loadDeliveryStatusFromSupabase() {
+            if (!state.useSupabase || !state.currentUser) return;
+
+            try {
+                const { data, error } = await supabase
+                    .from('delivery_status')
+                    .select('*')
+                    .eq('user_id', state.currentUser.id)
+                    .eq('is_delivered', true);
+
+                if (error) throw error;
+
+                // Limpar estado anterior
+                state.deliveredStops.clear();
+
+                // Adicionar paradas entregues ao Set
+                if (data && data.length > 0) {
+                    data.forEach(delivery => {
+                        state.deliveredStops.add(delivery.stop_index);
+                    });
+                    console.log(`✅ Status de entrega carregado: ${data.length} paradas entregues`);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar status de entrega:', error);
+            }
+        }
+
+        // Limpar todos os status de entrega (quando iniciar nova rota)
+        async function clearAllDeliveryStatus() {
+            if (!state.useSupabase || !state.currentUser) {
+                state.deliveredStops.clear();
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from('delivery_status')
+                    .delete()
+                    .eq('user_id', state.currentUser.id);
+
+                if (error) throw error;
+
+                state.deliveredStops.clear();
+                console.log('🗑️ Status de entrega limpo');
+            } catch (error) {
+                console.error('Erro ao limpar status de entrega:', error);
+            }
+        }
+
+        // Atualizar marcadores da rota após mudança de status de entrega
+        function updateRouteMarkers() {
+            if (!state.viewingOptimizedRoute || !state.optimizedOrder) return;
+
+            // Re-renderizar a rota otimizada com os marcadores atualizados
+            // Limpar marcadores e polylines anteriores
+            state.routePolylines.forEach(polyline => state.map.removeLayer(polyline));
+            state.routePolylines = [];
+
+            // Usar a ordem otimizada armazenada no estado
+            const optimizedOrder = state.optimizedOrder;
+            const isMobile = window.innerWidth <= 768;
+            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+            const totalStops = optimizedOrder.length;
+            const usePrettyIcons = !isMobile || totalStops <= 10;
+
+            // Detectar e deslocar marcadores sobrepostos
+            const offsetMap = new Map();
+            const OVERLAP_THRESHOLD = 0.00005;
+            const OFFSET_AMOUNT = 0.0001;
+
+            function getAdjustedCoordinates(lat, lng, index) {
+                let adjustedLat = lat;
+                let adjustedLng = lng;
+
+                for (const [key, offset] of offsetMap.entries()) {
+                    const [existingLat, existingLng] = key.split('_').map(Number);
+                    const latDiff = Math.abs(existingLat - adjustedLat);
+                    const lngDiff = Math.abs(existingLng - adjustedLng);
+
+                    if (latDiff < OVERLAP_THRESHOLD && lngDiff < OVERLAP_THRESHOLD) {
+                        const angle = (offset.count * 60) * (Math.PI / 180);
+                        adjustedLat = existingLat + (OFFSET_AMOUNT * Math.cos(angle));
+                        adjustedLng = existingLng + (OFFSET_AMOUNT * Math.sin(angle));
+                        offset.count++;
+                        break;
+                    }
+                }
+
+                const key = `${adjustedLat}_${adjustedLng}`;
+                if (!offsetMap.has(key)) {
+                    offsetMap.set(key, { count: 1 });
+                }
+
+                return [adjustedLat, adjustedLng];
+            }
+
+            // Reconstruir marcadores com status atualizado
+            optimizedOrder.forEach((originalIndex, routeIndex) => {
+                const stop = state.routeData[originalIndex];
+                if (!stop || !stop.latitude || !stop.longitude) return;
+
+                const [adjustedLat, adjustedLng] = getAdjustedCoordinates(
+                    stop.latitude,
+                    stop.longitude,
+                    routeIndex
+                );
+
+                const stopNumber = routeIndex + 1;
+                const isDelivered = state.deliveredStops.has(routeIndex);
+                const color = isDelivered ? '#9ca3af' : colors[routeIndex % colors.length];
+                const packageCount = stop.packageCount || 1;
+
+                // Mobile com MUITAS paradas: usar CircleMarker simples
+                if (isMobile && !usePrettyIcons) {
+                    const circleMarker = L.circleMarker([adjustedLat, adjustedLng], {
+                        radius: 12,
+                        fillColor: color,
+                        color: '#fff',
+                        weight: 2,
+                        opacity: isDelivered ? 0.6 : 1,
+                        fillOpacity: isDelivered ? 0.5 : 0.9
+                    }).addTo(state.map);
+
+                    circleMarker.on('click', function() {
+                        const sequencesList = stop.sequences && stop.sequences.length > 0
+                            ? stop.sequences.sort((a, b) => a - b).join(', ')
+                            : '-';
+                        const currentlyDelivered = state.deliveredStops.has(routeIndex);
+
+                        this.bindPopup(`
+                            <div style="font-size: 13px; min-width: 200px;">
+                                <div style="font-weight: bold; margin-bottom: 6px; color: ${color};">
+                                    ${currentlyDelivered ? '✅' : '🚚'} Parada ${stopNumber} • ${packageCount} pacote${packageCount > 1 ? 's' : ''}
+                                </div>
+                                <div style="margin: 3px 0;">📍 ${stop.address}</div>
+                                <div style="margin: 3px 0; font-size: 11px; color: #666;">Ordem: ${sequencesList}</div>
+                                ${!currentlyDelivered ? `
+                                    <button onclick="markStopAsDelivered(${routeIndex}, ${JSON.stringify(stop).replace(/"/g, '&quot;')})"
+                                        style="margin-top: 8px; width: 100%; padding: 8px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                        ✅ Marcar como entregue
+                                    </button>
+                                ` : `
+                                    <button onclick="unmarkStopAsDelivered(${routeIndex})"
+                                        style="margin-top: 8px; width: 100%; padding: 8px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                        ↩️ Desfazer entrega
+                                    </button>
+                                `}
+                                <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
+                                    style="margin-top: 6px; width: 100%; padding: 8px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                    🧭 Navegar até aqui
+                                </button>
+                            </div>
+                        `).openPopup();
+                    });
+
+                    state.routePolylines.push(circleMarker);
+                    return;
+                }
+
+                // PINO DE GPS com numeração
+                const iconHTML = `
+                    <div style="position: relative; width: 40px; height: ${packageCount > 1 ? '55px' : '40px'};">
+                        ${packageCount > 1 ? `
+                            <div style="
+                                position: absolute;
+                                top: -10px;
+                                left: 50%;
+                                transform: translateX(-50%);
+                                background: #ef4444;
+                                color: white;
+                                border-radius: ${isMobile ? '8px' : '12px'};
+                                padding: 2px ${isMobile ? '6px' : '8px'};
+                                font-size: ${isMobile ? '10px' : '11px'};
+                                font-weight: bold;
+                                border: ${isMobile ? '1px' : '2px'} solid white;
+                                box-shadow: ${isMobile ? '0 1px 3px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.3)'};
+                                white-space: nowrap;
+                                z-index: 10;
+                            ">
+                                ${packageCount} pacote${packageCount > 1 ? 's' : ''}
+                            </div>
+                        ` : ''}
+                        <div style="
+                            position: relative;
+                            width: ${isMobile ? '32px' : '36px'};
+                            height: ${isMobile ? '32px' : '36px'};
+                            background: ${color};
+                            border-radius: 50% 50% 50% 0;
+                            border: ${isMobile ? '2px' : '3px'} solid white;
+                            box-shadow: ${isMobile ? '0 2px 5px rgba(0,0,0,0.35)' : '0 3px 8px rgba(0,0,0,0.4)'};
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            transform: rotate(-45deg);
+                            margin: ${packageCount > 1 ? '18px' : '0'} auto 0 auto;
+                            opacity: ${isDelivered ? '0.6' : '1'};
+                        ">
+                            <div style="
+                                transform: rotate(45deg);
+                                color: white;
+                                font-weight: bold;
+                                font-size: ${isMobile ? '13px' : '16px'};
+                            ">
+                                ${stopNumber}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const numberedIcon = L.divIcon({
+                    className: 'numbered-marker',
+                    html: iconHTML,
+                    iconSize: packageCount > 1 ? [40, 55] : [40, 40],
+                    iconAnchor: packageCount > 1 ? [20, 55] : [20, 40]
+                });
+
+                const marker = L.marker([adjustedLat, adjustedLng], {
+                    icon: numberedIcon,
+                    title: `Parada ${stopNumber}: ${stop.address}`
+                }).addTo(state.map);
+
+                const sequencesList = stop.sequences && stop.sequences.length > 0
+                    ? stop.sequences.sort((a, b) => a - b).join(', ')
+                    : stop.sequence || '-';
+
+                const packagesList = stop.packages && stop.packages.length > 0
+                    ? (stop.packages.length <= (isMobile ? 5 : 10)
+                        ? stop.packages.join(', ')
+                        : `${stop.packages.slice(0, isMobile ? 5 : 10).join(', ')}... (+${stop.packages.length - (isMobile ? 5 : 10)})`)
+                    : stop.spxTn || '-';
+
+                const popupContent = isMobile ? `
+                    <div class="popup-content" style="max-width: 250px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 16px;">${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
+                        <p style="margin: 4px 0;"><strong>📦 Pacotes:</strong> ${packageCount}</p>
+                        <p style="margin: 4px 0;"><strong>🔢 Ordem:</strong> ${sequencesList}</p>
+                        <p style="margin: 4px 0;"><strong>📍</strong> ${stop.address}</p>
+                        ${stop.city ? `<p style="margin: 4px 0; font-size: 12px;"><strong>🏙️</strong> ${stop.city}</p>` : ''}
+                        ${!isDelivered ? `
+                            <button onclick="markStopAsDelivered(${routeIndex}, ${JSON.stringify(stop).replace(/"/g, '&quot;')})"
+                                style="margin-top: 10px; width: 100%; padding: 10px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                                ✅ Marcar como entregue
+                            </button>
+                        ` : `
+                            <button onclick="unmarkStopAsDelivered(${routeIndex})"
+                                style="margin-top: 10px; width: 100%; padding: 10px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                                ↩️ Desfazer entrega
+                            </button>
+                        `}
+                        <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
+                            style="margin-top: 6px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                            🧭 Navegar até aqui
+                        </button>
+                    </div>
+                ` : `
+                    <div class="popup-content">
+                        <h3>${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
+                        <p><strong>📦 Pacotes:</strong> ${packageCount}</p>
+                        <p><strong>🔢 Ordem:</strong><br><span style="font-size: 12px; color: #666;">${sequencesList}</span></p>
+                        <p><strong>📍 Endereço:</strong><br>${stop.address}</p>
+                        <p><strong>🏙️ Cidade:</strong> ${stop.city}</p>
+                        <p><strong>📮 CEP:</strong> ${stop.zipcode}</p>
+                        <p><strong>📦 Códigos SPX:</strong><br><span style="font-size: 11px; color: #666;">${packagesList}</span></p>
+                        ${!isDelivered ? `
+                            <button onclick="markStopAsDelivered(${routeIndex}, ${JSON.stringify(stop).replace(/"/g, '&quot;')})"
+                                style="margin-top: 12px; width: 100%; padding: 10px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                ✅ Marcar como entregue
+                            </button>
+                        ` : `
+                            <button onclick="unmarkStopAsDelivered(${routeIndex})"
+                                style="margin-top: 12px; width: 100%; padding: 10px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                ↩️ Desfazer entrega
+                            </button>
+                        `}
+                        <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
+                            style="margin-top: 8px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            🧭 Navegar até aqui
+                        </button>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                state.routePolylines.push(marker);
+
+                // Desenhar linha para a próxima parada
+                if (routeIndex < optimizedOrder.length - 1) {
+                    const nextStop = state.routeData[optimizedOrder[routeIndex + 1]];
+                    if (nextStop && nextStop.latitude && nextStop.longitude) {
+                        const polyline = L.polyline([
+                            [stop.latitude, stop.longitude],
+                            [nextStop.latitude, nextStop.longitude]
+                        ], {
+                            color: color,
+                            weight: 3,
+                            opacity: 0.7,
+                            dashArray: '10, 5'
+                        }).addTo(state.map);
+
+                        state.routePolylines.push(polyline);
+                    }
+                }
+            });
+
+            console.log('🔄 Marcadores da rota atualizados');
         }
 
         // Configurar sincronização automática com POLLING (mais confiável)
@@ -5385,6 +5795,9 @@ Retorne a ordem otimizada:`;
             // Ativar modo de visualização de rota otimizada
             state.viewingOptimizedRoute = true;
 
+            // Armazenar ordem otimizada no estado
+            state.optimizedOrder = optimizedOrder;
+
             // Salvar rota otimizada no Supabase
             saveOptimizedRouteToSupabase(optimizedOrder);
 
@@ -5458,7 +5871,8 @@ Retorne a ordem otimizada:`;
                 );
 
                 const stopNumber = routeIndex + 1;
-                const color = colors[routeIndex % colors.length];
+                const isDelivered = state.deliveredStops.has(routeIndex);
+                const color = isDelivered ? '#9ca3af' : colors[routeIndex % colors.length]; // Cinza se entregue
                 const packageCount = stop.packageCount || 1;
 
                 // Mobile com MUITAS paradas: usar CircleMarker simples (máxima performance)
@@ -5468,8 +5882,8 @@ Retorne a ordem otimizada:`;
                         fillColor: color,
                         color: '#fff',
                         weight: 2,
-                        opacity: 1,
-                        fillOpacity: 0.9
+                        opacity: isDelivered ? 0.6 : 1,
+                        fillOpacity: isDelivered ? 0.5 : 0.9
                     }).addTo(state.map);
 
                     // Popup lazy-loaded com info de pacotes e botão de navegação
@@ -5477,16 +5891,28 @@ Retorne a ordem otimizada:`;
                         const sequencesList = stop.sequences && stop.sequences.length > 0
                             ? stop.sequences.sort((a, b) => a - b).join(', ')
                             : '-';
+                        const currentlyDelivered = state.deliveredStops.has(routeIndex);
 
                         this.bindPopup(`
                             <div style="font-size: 13px; min-width: 200px;">
                                 <div style="font-weight: bold; margin-bottom: 6px; color: ${color};">
-                                    🚚 Parada ${stopNumber} • ${packageCount} pacote${packageCount > 1 ? 's' : ''}
+                                    ${currentlyDelivered ? '✅' : '🚚'} Parada ${stopNumber} • ${packageCount} pacote${packageCount > 1 ? 's' : ''}
                                 </div>
                                 <div style="margin: 3px 0;">📍 ${stop.address}</div>
                                 <div style="margin: 3px 0; font-size: 11px; color: #666;">Ordem: ${sequencesList}</div>
+                                ${!currentlyDelivered ? `
+                                    <button onclick="markStopAsDelivered(${routeIndex}, ${JSON.stringify(stop).replace(/"/g, '&quot;')})"
+                                        style="margin-top: 8px; width: 100%; padding: 8px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                        ✅ Marcar como entregue
+                                    </button>
+                                ` : `
+                                    <button onclick="unmarkStopAsDelivered(${routeIndex})"
+                                        style="margin-top: 8px; width: 100%; padding: 8px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                        ↩️ Desfazer entrega
+                                    </button>
+                                `}
                                 <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
-                                    style="margin-top: 8px; width: 100%; padding: 8px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
+                                    style="margin-top: 6px; width: 100%; padding: 8px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">
                                     🧭 Navegar até aqui
                                 </button>
                             </div>
@@ -5575,27 +6001,49 @@ Retorne a ordem otimizada:`;
                 // Popup simplificado para mobile
                 const popupContent = isMobile ? `
                     <div class="popup-content" style="max-width: 250px;">
-                        <h3 style="margin: 0 0 8px 0; font-size: 16px;">🚚 Parada ${stopNumber}</h3>
+                        <h3 style="margin: 0 0 8px 0; font-size: 16px;">${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
                         <p style="margin: 4px 0;"><strong>📦 Pacotes:</strong> ${packageCount}</p>
                         <p style="margin: 4px 0;"><strong>🔢 Ordem:</strong> ${sequencesList}</p>
                         <p style="margin: 4px 0;"><strong>📍</strong> ${stop.address}</p>
                         ${stop.city ? `<p style="margin: 4px 0; font-size: 12px;"><strong>🏙️</strong> ${stop.city}</p>` : ''}
+                        ${!isDelivered ? `
+                            <button onclick="markStopAsDelivered(${routeIndex}, ${JSON.stringify(stop).replace(/"/g, '&quot;')})"
+                                style="margin-top: 10px; width: 100%; padding: 10px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                                ✅ Marcar como entregue
+                            </button>
+                        ` : `
+                            <button onclick="unmarkStopAsDelivered(${routeIndex})"
+                                style="margin-top: 10px; width: 100%; padding: 10px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                                ↩️ Desfazer entrega
+                            </button>
+                        `}
                         <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
-                            style="margin-top: 10px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                            style="margin-top: 6px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
                             🧭 Navegar até aqui
                         </button>
                     </div>
                 ` : `
                     <div class="popup-content">
-                        <h3>🚚 Parada ${stopNumber}</h3>
+                        <h3>${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
                         <p><strong>📦 Pacotes:</strong> ${packageCount}</p>
                         <p><strong>🔢 Ordem:</strong><br><span style="font-size: 12px; color: #666;">${sequencesList}</span></p>
                         <p><strong>📍 Endereço:</strong><br>${stop.address}</p>
                         <p><strong>🏙️ Cidade:</strong> ${stop.city}</p>
                         <p><strong>📮 CEP:</strong> ${stop.zipcode}</p>
                         <p><strong>📦 Códigos SPX:</strong><br><span style="font-size: 11px; color: #666;">${packagesList}</span></p>
+                        ${!isDelivered ? `
+                            <button onclick="markStopAsDelivered(${routeIndex}, ${JSON.stringify(stop).replace(/"/g, '&quot;')})"
+                                style="margin-top: 12px; width: 100%; padding: 10px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                ✅ Marcar como entregue
+                            </button>
+                        ` : `
+                            <button onclick="unmarkStopAsDelivered(${routeIndex})"
+                                style="margin-top: 12px; width: 100%; padding: 10px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                ↩️ Desfazer entrega
+                            </button>
+                        `}
                         <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
-                            style="margin-top: 12px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            style="margin-top: 8px; width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                             🧭 Navegar até aqui
                         </button>
                     </div>
