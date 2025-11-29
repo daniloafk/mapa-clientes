@@ -5954,20 +5954,14 @@ Se não conseguir encontrar o endereço exato, retorne {"latitude": null, "longi
             optimizeRouteBtn.disabled = true;
 
             try {
-                // Verificar se Poe API está disponível
-                if (window.Poe && typeof window.Poe.registerHandler === 'function') {
-                    // Usar IA do Poe se disponível
-                    await optimizeRouteWithAI();
-                } else {
-                    // Usar algoritmo local (Nearest Neighbor)
-                    console.log('🔧 Poe API não disponível, usando algoritmo local');
-                    const optimizedOrder = optimizeRouteLocally(state.routeData);
-                    processOptimizedRoute(optimizedOrder);
-                    routeStatus.textContent = `✓ Rota otimizada! ${optimizedOrder.length} paradas.`;
-                    routeStatus.className = 'upload-status success';
-                    // showToast(`Rota otimizada com sucesso! ${optimizedOrder.length} paradas.`, 'success');
-                    optimizeRouteBtn.disabled = false;
-                }
+                // Usar algoritmo local (Nearest Neighbor) - rápido e sem necessidade de confirmação
+                console.log('🔧 Roteirizando com algoritmo local');
+                const optimizedOrder = optimizeRouteLocally(state.routeData);
+                processOptimizedRoute(optimizedOrder);
+                routeStatus.textContent = `✓ Rota otimizada! ${optimizedOrder.length} paradas.`;
+                routeStatus.className = 'upload-status success';
+                // showToast(`Rota otimizada com sucesso! ${optimizedOrder.length} paradas.`, 'success');
+                optimizeRouteBtn.disabled = false;
 
             } catch (error) {
                 console.error('Erro ao iniciar roteirização:', error);
