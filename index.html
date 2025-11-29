@@ -3602,13 +3602,14 @@
                         fillOpacity: isDelivered ? 0.5 : 0.9
                     }).addTo(state.map);
 
-                    circleMarker.on('click', function() {
+                    // CORREÇÃO: Não usar .openPopup() dentro do click handler - o Leaflet já abre o popup automaticamente
+                    const createPopupContent = () => {
                         const sequencesList = stop.sequences && stop.sequences.length > 0
                             ? stop.sequences.sort((a, b) => a - b).join(', ')
                             : '-';
                         const currentlyDelivered = state.deliveredStops.has(routeIndex);
 
-                        this.bindPopup(`
+                        return `
                             <div style="font-size: 13px; min-width: 200px;">
                                 <div style="font-weight: bold; margin-bottom: 6px; color: ${color};">
                                     ${currentlyDelivered ? '✅' : '🚚'} Parada ${stopNumber} • ${packageCount} pacote${packageCount > 1 ? 's' : ''}
@@ -3631,7 +3632,15 @@
                                     🧭 Navegar até aqui
                                 </button>
                             </div>
-                        `).openPopup();
+                        `;
+                    };
+
+                    // Bind popup inicial
+                    circleMarker.bindPopup(createPopupContent());
+
+                    // Atualizar conteúdo do popup quando aberto (para refletir mudanças de status)
+                    circleMarker.on('click', function() {
+                        this.setPopupContent(createPopupContent());
                     });
 
                     state.routePolylines.push(circleMarker);
@@ -6242,13 +6251,14 @@ Retorne a ordem otimizada:`;
                     }).addTo(state.map);
 
                     // Popup lazy-loaded com info de pacotes e botão de navegação
-                    circleMarker.on('click', function() {
+                    // CORREÇÃO: Não usar .openPopup() dentro do click handler - o Leaflet já abre o popup automaticamente
+                    const createPopupContent = () => {
                         const sequencesList = stop.sequences && stop.sequences.length > 0
                             ? stop.sequences.sort((a, b) => a - b).join(', ')
                             : '-';
                         const currentlyDelivered = state.deliveredStops.has(routeIndex);
 
-                        this.bindPopup(`
+                        return `
                             <div style="font-size: 13px; min-width: 200px;">
                                 <div style="font-weight: bold; margin-bottom: 6px; color: ${color};">
                                     ${currentlyDelivered ? '✅' : '🚚'} Parada ${stopNumber} • ${packageCount} pacote${packageCount > 1 ? 's' : ''}
@@ -6271,7 +6281,15 @@ Retorne a ordem otimizada:`;
                                     🧭 Navegar até aqui
                                 </button>
                             </div>
-                        `).openPopup();
+                        `;
+                    };
+
+                    // Bind popup inicial
+                    circleMarker.bindPopup(createPopupContent());
+
+                    // Atualizar conteúdo do popup quando aberto (para refletir mudanças de status)
+                    circleMarker.on('click', function() {
+                        this.setPopupContent(createPopupContent());
                     });
 
                     state.routePolylines.push(circleMarker);
@@ -6465,8 +6483,21 @@ Retorne a ordem otimizada:`;
 
             // Fechar aba lateral em mobile para melhor visualização
             const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
             if (sidebar && sidebar.classList.contains('open') && window.innerWidth <= 768) {
                 sidebar.classList.remove('open');
+                // CORREÇÃO: Remover também o overlay da sidebar quando fechar
+                if (sidebarOverlay) {
+                    sidebarOverlay.classList.remove('active');
+                }
+                // CORREÇÃO CRÍTICA: Restaurar overflow do body (estava bloqueando interação)
+                document.body.style.overflow = '';
+                // Restaurar banner de Admin/Sair
+                const userHeaderInfo = document.getElementById('userHeaderInfo');
+                if (userHeaderInfo) {
+                    userHeaderInfo.style.opacity = '1';
+                    userHeaderInfo.style.pointerEvents = 'auto';
+                }
             }
 
             console.log('✅ Rota otimizada processada e exibida no mapa');
