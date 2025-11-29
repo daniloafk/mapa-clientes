@@ -2962,47 +2962,47 @@
                 wheelPxPerZoomLevel: 60
             }).setView([lat, lng], isMobile ? 19 : 18);
 
-            // Criar layers de Google Maps com tiles Retina (2x) para textos maiores
+            // Criar layers de Google Maps com máxima qualidade
             const googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
                 attribution: '© Google Maps',
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-                maxZoom: 21,
+                maxZoom: 22,
                 minZoom: 3,
                 updateWhenIdle: false,
                 updateWhenZooming: true,
-                keepBuffer: 2,
-                tileSize: 512,        // Tiles 2x maiores (Retina)
-                zoomOffset: -1,       // Ajusta zoom para compensar tiles maiores
-                detectRetina: false,  // Desabilitar detecção automática (controlamos manualmente)
-                className: isMobile ? 'mobile-tiles-hq' : ''
+                keepBuffer: 3,
+                tileSize: 256,
+                zoomOffset: 0,
+                detectRetina: true,
+                className: ''
             });
 
             const googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
                 attribution: '© Google Maps',
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-                maxZoom: 21,
+                maxZoom: 22,
                 minZoom: 3,
                 updateWhenIdle: false,
                 updateWhenZooming: true,
-                keepBuffer: 2,
-                tileSize: 512,        // Tiles 2x maiores (Retina)
-                zoomOffset: -1,       // Ajusta zoom para compensar tiles maiores
-                detectRetina: false,  // Desabilitar detecção automática
-                className: isMobile ? 'mobile-tiles-hq' : ''
+                keepBuffer: 3,
+                tileSize: 256,
+                zoomOffset: 0,
+                detectRetina: true,
+                className: ''
             });
 
             const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
                 attribution: '© Google Maps',
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-                maxZoom: 21,
+                maxZoom: 22,
                 minZoom: 3,
                 updateWhenIdle: false,
                 updateWhenZooming: true,
-                keepBuffer: 2,
-                tileSize: 512,        // Tiles 2x maiores (Retina)
-                zoomOffset: -1,       // Ajusta zoom para compensar tiles maiores
-                detectRetina: false,  // Desabilitar detecção automática
-                className: isMobile ? 'mobile-tiles-hq' : ''
+                keepBuffer: 3,
+                tileSize: 256,
+                zoomOffset: 0,
+                detectRetina: true,
+                className: ''
             });
 
             // Adicionar layer padrão (mapa de ruas)
