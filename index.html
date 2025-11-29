@@ -1764,9 +1764,15 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Tiles de alta qualidade */
+        /* Tiles de alta qualidade com textos maiores */
+        .leaflet-tile-container {
+            transform: scale(1.3);
+            transform-origin: 0 0;
+        }
+
         .leaflet-tile-container img {
             image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
         }
 
         /* Melhorar renderização de texto nos popups mobile */
@@ -6419,7 +6425,7 @@ Retorne a ordem otimizada:`;
                     console.log('📍 Ajustando visualização para mostrar rota otimizada');
                     state.map.fitBounds(bounds, {
                         padding: isMobile ? [50, 50] : [100, 100],
-                        maxZoom: isMobile ? 16 : 17,
+                        maxZoom: isMobile ? 15 : 16,
                         animate: true,
                         duration: 1.0
                     });
