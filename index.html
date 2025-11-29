@@ -1748,6 +1748,40 @@
                 min-width: auto;
             }
         }
+
+        /* Melhorias de qualidade para mapa em mobile */
+        .mobile-tiles-hq img {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+        }
+
+        /* Melhorar renderização do Leaflet em telas de alta DPI */
+        .leaflet-container {
+            image-rendering: -webkit-optimize-contrast;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Tiles de alta qualidade */
+        .leaflet-tile-container img {
+            image-rendering: -webkit-optimize-contrast;
+        }
+
+        /* Melhorar renderização de texto nos popups mobile */
+        .leaflet-popup-content {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        /* Otimizar renderização dos marcadores */
+        .numbered-marker {
+            will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
     </style>
 </head>
 <body>
@@ -2762,23 +2796,28 @@
                 tap: true,
                 tapTolerance: 15,
                 bounceAtZoomLimits: false,
-                // Desabilitar animações em mobile
-                zoomAnimation: !isMobile,
-                fadeAnimation: !isMobile,
-                markerZoomAnimation: !isMobile
-            }).setView([lat, lng], 16);
+                // Manter animações suaves para melhor experiência
+                zoomAnimation: true,
+                fadeAnimation: true,
+                markerZoomAnimation: true,
+                // Configurações de zoom
+                zoomSnap: 0.5,
+                zoomDelta: 0.5
+            }).setView([lat, lng], isMobile ? 17 : 16);
 
-            // Add tile layer com otimizações
+            // Add tile layer com alta qualidade para mobile
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
                 maxZoom: 19,
-                updateWhenIdle: true,  // Atualizar tiles apenas quando parar de mover
-                updateWhenZooming: false,  // Não atualizar durante zoom
-                keepBuffer: isMobile ? 1 : 2,  // Menos buffer em mobile
-                tileSize: isMobile ? 256 : 256,  // Tamanho padrão
-                detectRetina: false,  // Desabilitar retina em mobile (tiles menores)
-                // Tiles de menor qualidade em mobile para economizar banda/CPU
-                className: isMobile ? 'mobile-tiles' : ''
+                updateWhenIdle: false,  // Atualizar tiles em tempo real para melhor experiência
+                updateWhenZooming: true,  // Atualizar durante zoom para melhor qualidade
+                keepBuffer: 2,  // Buffer adequado para transições suaves
+                tileSize: 256,
+                zoomOffset: 0,
+                detectRetina: true,  // Habilitar retina para telas de alta resolução (melhor qualidade em mobile)
+                crossOrigin: true,
+                // Tiles de alta qualidade
+                className: isMobile ? 'mobile-tiles-hq' : ''
             }).addTo(state.map);
 
             // Add current location marker
