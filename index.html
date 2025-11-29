@@ -1782,6 +1782,130 @@
             backface-visibility: hidden;
             -webkit-backface-visibility: hidden;
         }
+
+        /* Controles do Mapa (estilo Amazon Flex) */
+        .map-controls {
+            position: absolute;
+            top: 80px;
+            right: 16px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .map-control-btn {
+            background: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            transition: all 0.2s;
+            min-width: 50px;
+        }
+
+        .map-control-btn:hover {
+            background: #f3f4f6;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .map-control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .map-control-btn svg {
+            width: 24px;
+            height: 24px;
+            color: #2563eb;
+        }
+
+        #mapTypeLabel {
+            white-space: nowrap;
+        }
+
+        /* Contador de Entregas */
+        .delivery-counter {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            min-width: 140px;
+        }
+
+        .counter-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .counter-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+
+        .counter-progress {
+            width: 100%;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .map-controls {
+                top: 70px;
+                right: 12px;
+                gap: 10px;
+            }
+
+            .map-control-btn {
+                padding: 10px;
+                border-radius: 6px;
+            }
+
+            .map-control-btn svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            #mapTypeLabel {
+                font-size: 12px;
+            }
+
+            .delivery-counter {
+                padding: 12px;
+                min-width: 120px;
+            }
+
+            .counter-label {
+                font-size: 10px;
+            }
+
+            .counter-value {
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1923,6 +2047,35 @@
 
         <!-- Map -->
         <div id="map"></div>
+
+        <!-- Controles do Mapa (estilo Amazon Flex) -->
+        <div class="map-controls">
+            <!-- Botão Alternar Mapa/Satélite -->
+            <button class="map-control-btn" id="toggleMapTypeBtn" title="Alternar Mapa/Satélite" onclick="toggleMapType()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 18.5C7.61 19.4 5 15.27 5 11V8.3l7-3.12 7 3.12V11c0 4.27-2.61 8.4-7 9.5z"/>
+                </svg>
+                <span id="mapTypeLabel">Satélite</span>
+            </button>
+
+            <!-- Botão Recentralizar GPS -->
+            <button class="map-control-btn" id="recenterBtn" title="Recentralizar no GPS" onclick="recenterMap()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                </svg>
+            </button>
+
+            <!-- Contador de Entregas -->
+            <div class="delivery-counter" id="deliveryCounter" style="display: none;">
+                <div class="counter-label">Entregas</div>
+                <div class="counter-value">
+                    <span id="deliveredCount">0</span> / <span id="totalCount">0</span>
+                </div>
+                <div class="counter-progress">
+                    <div class="progress-bar" id="deliveryProgress"></div>
+                </div>
+            </div>
+        </div>
 
         <!-- Mobile Menu Toggle -->
         <button class="menu-toggle" id="menuToggle">
@@ -2280,7 +2433,9 @@
             editingUserId: null, // ID do usuário sendo editado
             syncPollingInterval: null, // Interval para sincronização automática (polling)
             deliveredStops: new Set(), // Set de índices das paradas entregues
-            optimizedOrder: null // Ordem otimizada atual das paradas
+            optimizedOrder: null, // Ordem otimizada atual das paradas
+            mapLayers: null, // Layers do mapa (streets, satellite, hybrid)
+            currentMapLayer: 'streets' // Layer atual do mapa
         };
 
         // ========== SISTEMA DE AUTENTICAÇÃO ==========
@@ -2805,22 +2960,59 @@
                 zoomDelta: 0.5
             }).setView([lat, lng], isMobile ? 17 : 16);
 
-            // Add tile layer CartoDB Voyager (estilo moderno similar ao Google Maps)
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
+            // Criar layers de Google Maps (rua e satélite)
+            const googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                attribution: '© Google Maps',
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
                 maxZoom: 20,
                 minZoom: 1,
-                updateWhenIdle: false,  // Atualizar tiles em tempo real para melhor experiência
-                updateWhenZooming: true,  // Atualizar durante zoom para melhor qualidade
-                keepBuffer: 2,  // Buffer adequado para transições suaves
+                updateWhenIdle: false,
+                updateWhenZooming: true,
+                keepBuffer: 2,
                 tileSize: 256,
                 zoomOffset: 0,
-                detectRetina: true,  // Habilitar retina para telas de alta resolução (melhor qualidade em mobile)
-                crossOrigin: true,
-                // Tiles de alta qualidade
+                detectRetina: true,
                 className: isMobile ? 'mobile-tiles-hq' : ''
-            }).addTo(state.map);
+            });
+
+            const googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                attribution: '© Google Maps',
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                maxZoom: 20,
+                minZoom: 1,
+                updateWhenIdle: false,
+                updateWhenZooming: true,
+                keepBuffer: 2,
+                tileSize: 256,
+                zoomOffset: 0,
+                detectRetina: true,
+                className: isMobile ? 'mobile-tiles-hq' : ''
+            });
+
+            const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+                attribution: '© Google Maps',
+                subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                maxZoom: 20,
+                minZoom: 1,
+                updateWhenIdle: false,
+                updateWhenZooming: true,
+                keepBuffer: 2,
+                tileSize: 256,
+                zoomOffset: 0,
+                detectRetina: true,
+                className: isMobile ? 'mobile-tiles-hq' : ''
+            });
+
+            // Adicionar layer padrão (mapa de ruas)
+            googleStreets.addTo(state.map);
+
+            // Armazenar layers no estado para alternar depois
+            state.mapLayers = {
+                streets: googleStreets,
+                satellite: googleSatellite,
+                hybrid: googleHybrid
+            };
+            state.currentMapLayer = 'streets';
 
             // Add current location marker
             state.currentLocationMarker = L.marker([lat, lng], {
@@ -3244,6 +3436,7 @@
                 // Atualizar estado local
                 state.deliveredStops.add(stopIndex);
                 updateRouteMarkers();
+                updateDeliveryCounter(); // Atualizar contador
                 showToast('✅ Parada marcada como entregue', 'success');
                 console.log(`✅ Parada ${stopIndex} marcada como entregue no Supabase`);
             } catch (error) {
@@ -3277,6 +3470,7 @@
                 // Atualizar estado local
                 state.deliveredStops.delete(stopIndex);
                 updateRouteMarkers();
+                updateDeliveryCounter(); // Atualizar contador
                 showToast('↩️ Entrega desfeita', 'info');
                 console.log(`↩️ Parada ${stopIndex} desmarcada no Supabase`);
             } catch (error) {
@@ -3543,6 +3737,7 @@
                 ` : `
                     <div class="popup-content">
                         <h3>${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
+                        ${distanceInfo}
                         <p><strong>📦 Pacotes:</strong> ${packageCount}</p>
                         <p><strong>🔢 Ordem:</strong><br><span style="font-size: 12px; color: #666;">${sequencesList}</span></p>
                         <p><strong>📍 Endereço:</strong><br>${stop.address}</p>
@@ -3610,6 +3805,92 @@
             }, 500); // 0.5 segundos
 
             console.log('✅ Sincronização automática ativada! (verificando a cada 0.5s)');
+        }
+
+        // ========== CONTROLES DO MAPA (AMAZON FLEX STYLE) ==========
+
+        // Alternar tipo de mapa (Rua/Satélite/Híbrido)
+        function toggleMapType() {
+            if (!state.map || !state.mapLayers) return;
+
+            const types = ['streets', 'satellite', 'hybrid'];
+            const labels = ['Satélite', 'Híbrido', 'Mapa'];
+            const currentIndex = types.indexOf(state.currentMapLayer);
+            const nextIndex = (currentIndex + 1) % types.length;
+            const nextType = types[nextIndex];
+
+            // Remover layer atual
+            state.map.removeLayer(state.mapLayers[state.currentMapLayer]);
+
+            // Adicionar novo layer
+            state.mapLayers[nextType].addTo(state.map);
+
+            // Atualizar estado e UI
+            state.currentMapLayer = nextType;
+            document.getElementById('mapTypeLabel').textContent = labels[nextIndex];
+
+            console.log(`🗺️ Mapa alterado para: ${nextType}`);
+        }
+
+        // Recentralizar mapa na localização atual do GPS
+        function recenterMap() {
+            if (!state.map || !state.currentLocationMarker) {
+                showToast('Localização GPS não disponível', 'error');
+                return;
+            }
+
+            const latlng = state.currentLocationMarker.getLatLng();
+            state.map.setView(latlng, 17, {
+                animate: true,
+                duration: 0.5
+            });
+
+            // Efeito visual no botão
+            const btn = document.getElementById('recenterBtn');
+            btn.style.transform = 'scale(0.9) rotate(180deg)';
+            setTimeout(() => {
+                btn.style.transform = 'scale(1) rotate(0deg)';
+            }, 300);
+
+            showToast('📍 Centralizado na sua localização', 'success');
+        }
+
+        // Atualizar contador de entregas
+        function updateDeliveryCounter() {
+            if (!state.optimizedOrder) {
+                document.getElementById('deliveryCounter').style.display = 'none';
+                return;
+            }
+
+            const total = state.optimizedOrder.length;
+            const delivered = state.deliveredStops.size;
+            const percentage = total > 0 ? (delivered / total) * 100 : 0;
+
+            document.getElementById('deliveryCounter').style.display = 'block';
+            document.getElementById('deliveredCount').textContent = delivered;
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('deliveryProgress').style.width = `${percentage}%`;
+        }
+
+        // Calcular tempo estimado (baseado em velocidade média de 30 km/h em cidade)
+        function calculateEstimatedTime(distanceKm) {
+            const avgSpeed = 30; // km/h
+            const hours = distanceKm / avgSpeed;
+            const minutes = Math.round(hours * 60);
+
+            if (minutes < 1) return '< 1 min';
+            if (minutes < 60) return `${minutes} min`;
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            return `${h}h ${m}min`;
+        }
+
+        // Formatar distância
+        function formatDistance(distanceKm) {
+            if (distanceKm < 1) {
+                return `${Math.round(distanceKm * 1000)} m`;
+            }
+            return `${distanceKm.toFixed(1)} km`;
         }
 
         // Verificar mudanças nos clientes
@@ -6039,10 +6320,20 @@ Retorne a ordem otimizada:`;
                         : `${stop.packages.slice(0, isMobile ? 5 : 10).join(', ')}... (+${stop.packages.length - (isMobile ? 5 : 10)})`)
                     : stop.spxTn || '-';
 
+                // Calcular distância e tempo da localização atual até esta parada
+                let distanceInfo = '';
+                if (state.currentLocationMarker) {
+                    const currentPos = state.currentLocationMarker.getLatLng();
+                    const distKm = calculateDistance(currentPos.lat, currentPos.lng, stop.latitude, stop.longitude);
+                    const estTime = calculateEstimatedTime(distKm);
+                    distanceInfo = `<p style="margin: 4px 0; padding: 6px; background: #eff6ff; border-radius: 4px; font-size: ${isMobile ? '11px' : '12px'};"><strong>🚗 Distância:</strong> ${formatDistance(distKm)} · <strong>⏱️</strong> ${estTime}</p>`;
+                }
+
                 // Popup simplificado para mobile
                 const popupContent = isMobile ? `
                     <div class="popup-content" style="max-width: 250px;">
                         <h3 style="margin: 0 0 8px 0; font-size: 16px;">${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
+                        ${distanceInfo}
                         <p style="margin: 4px 0;"><strong>📦 Pacotes:</strong> ${packageCount}</p>
                         <p style="margin: 4px 0;"><strong>🔢 Ordem:</strong> ${sequencesList}</p>
                         <p style="margin: 4px 0;"><strong>📍</strong> ${stop.address}</p>
@@ -6066,6 +6357,7 @@ Retorne a ordem otimizada:`;
                 ` : `
                     <div class="popup-content">
                         <h3>${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
+                        ${distanceInfo}
                         <p><strong>📦 Pacotes:</strong> ${packageCount}</p>
                         <p><strong>🔢 Ordem:</strong><br><span style="font-size: 12px; color: #666;">${sequencesList}</span></p>
                         <p><strong>📍 Endereço:</strong><br>${stop.address}</p>
@@ -6134,6 +6426,9 @@ Retorne a ordem otimizada:`;
 
             // Armazenar rota otimizada
             state.optimizedRoute = optimizedOrder;
+
+            // Atualizar contador de entregas
+            updateDeliveryCounter();
 
             // Fechar aba lateral em mobile para melhor visualização
             const sidebar = document.querySelector('.sidebar');
