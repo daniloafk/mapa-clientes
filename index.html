@@ -3051,6 +3051,21 @@
                             uploadStatus.textContent = `✓ ${state.routeData.length} endereços, ${totalPackages} pacotes carregados`;
                             uploadStatus.className = 'upload-status success';
                         }
+
+                        // Carregar e restaurar rota otimizada se existir
+                        const optimizedRoute = await loadOptimizedRouteFromSupabase();
+                        if (optimizedRoute && optimizedRoute.length > 0) {
+                            // Restaurar a rota otimizada no mapa
+                            setTimeout(() => {
+                                processOptimizedRoute(optimizedRoute);
+                                const routeStatus = document.getElementById('routeStatus');
+                                if (routeStatus) {
+                                    routeStatus.textContent = `✓ Rota otimizada restaurada! ${optimizedRoute.length} paradas.`;
+                                    routeStatus.className = 'upload-status success';
+                                }
+                                console.log('✅ Rota otimizada restaurada automaticamente');
+                            }, 500); // Aguardar mapa estar pronto
+                        }
                     }
                 } else {
                     state.routeData = [];
@@ -3059,6 +3074,70 @@
             } catch (error) {
                 console.error('Erro ao carregar dados de rota:', error);
                 state.routeData = [];
+            }
+        }
+
+        // Salvar rota otimizada no Supabase
+        async function saveOptimizedRouteToSupabase(optimizedOrder) {
+            if (!state.useSupabase || !state.currentUser) return;
+
+            try {
+                // Limpar rotas otimizadas antigas APENAS deste usuário
+                const { error: deleteError } = await supabase
+                    .from('optimized_routes')
+                    .delete()
+                    .eq('user_id', state.currentUser.id);
+
+                if (deleteError) throw deleteError;
+
+                // Salvar nova rota otimizada
+                const { error: insertError } = await supabase
+                    .from('optimized_routes')
+                    .insert([{
+                        user_id: state.currentUser.id,
+                        route_order: optimizedOrder,
+                        total_stops: optimizedOrder.length
+                    }]);
+
+                if (insertError) throw insertError;
+
+                console.log(`✅ Rota otimizada salva no Supabase (${optimizedOrder.length} paradas)`);
+            } catch (error) {
+                console.error('Erro ao salvar rota otimizada:', error);
+                // Não mostrar erro para o usuário, apenas log
+            }
+        }
+
+        // Carregar rota otimizada do Supabase
+        async function loadOptimizedRouteFromSupabase() {
+            if (!state.useSupabase || !state.currentUser) return null;
+
+            try {
+                const { data, error } = await supabase
+                    .from('optimized_routes')
+                    .select('*')
+                    .eq('user_id', state.currentUser.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (error) {
+                    if (error.code === 'PGRST116') {
+                        // Nenhuma rota encontrada - normal
+                        return null;
+                    }
+                    throw error;
+                }
+
+                if (data && data.route_order) {
+                    console.log(`✅ Rota otimizada carregada do Supabase (${data.total_stops} paradas)`);
+                    return data.route_order;
+                }
+
+                return null;
+            } catch (error) {
+                console.error('Erro ao carregar rota otimizada:', error);
+                return null;
             }
         }
 
@@ -5305,6 +5384,9 @@ Retorne a ordem otimizada:`;
         function processOptimizedRoute(optimizedOrder) {
             // Ativar modo de visualização de rota otimizada
             state.viewingOptimizedRoute = true;
+
+            // Salvar rota otimizada no Supabase
+            saveOptimizedRouteToSupabase(optimizedOrder);
 
             // Fechar TODOS os popups, incluindo o "Você está aqui"
             state.map.closePopup();
