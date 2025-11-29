@@ -2962,46 +2962,43 @@
                 wheelPxPerZoomLevel: 60
             }).setView([lat, lng], isMobile ? 18 : 17);
 
-            // Criar layers de Google Maps com máxima qualidade
-            const googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            // Criar layers de Google Maps com tiles Retina (textos e ícones em tamanho normal do Google Maps)
+            const googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&scale=2', {
                 attribution: '© Google Maps',
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-                maxZoom: 22,
+                maxZoom: 21,
                 minZoom: 3,
                 updateWhenIdle: false,
                 updateWhenZooming: true,
-                keepBuffer: 3,
+                keepBuffer: 2,
                 tileSize: 256,
                 zoomOffset: 0,
-                detectRetina: true,
                 className: ''
             });
 
-            const googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            const googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&scale=2', {
                 attribution: '© Google Maps',
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-                maxZoom: 22,
+                maxZoom: 21,
                 minZoom: 3,
                 updateWhenIdle: false,
                 updateWhenZooming: true,
-                keepBuffer: 3,
+                keepBuffer: 2,
                 tileSize: 256,
                 zoomOffset: 0,
-                detectRetina: true,
                 className: ''
             });
 
-            const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}&scale=2', {
                 attribution: '© Google Maps',
                 subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-                maxZoom: 22,
+                maxZoom: 21,
                 minZoom: 3,
                 updateWhenIdle: false,
                 updateWhenZooming: true,
-                keepBuffer: 3,
+                keepBuffer: 2,
                 tileSize: 256,
                 zoomOffset: 0,
-                detectRetina: true,
                 className: ''
             });
 
