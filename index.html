@@ -1253,6 +1253,14 @@
                 white-space: nowrap;
             }
 
+            /* Botão de fechar configurações */
+            .close-admin-btn {
+                min-height: 44px;
+                min-width: 44px;
+                padding: 8px 14px;
+                font-size: 28px;
+            }
+
             /* Botão adicionar usuário */
             #addUserBtn {
                 min-height: 44px;
@@ -1654,6 +1662,33 @@
             display: flex;
             gap: 10px;
             align-items: center;
+        }
+
+        .close-admin-btn {
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            line-height: 1;
+            min-width: 40px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-admin-btn:hover {
+            background: var(--danger-hover);
+            transform: scale(1.05);
+        }
+
+        .close-admin-btn:active {
+            transform: scale(0.95);
         }
 
         .admin-content {
