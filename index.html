@@ -3838,8 +3838,8 @@
                         }
                     }
 
-                    // Redesenhar mapa
-                    redrawOptimizedRoute();
+                    // Redesenhar mapa com a nova ordem
+                    processOptimizedRoute(state.optimizedOrder);
                     updateDeliveryCounter();
 
                     showToast('🗑️ Parada excluída com sucesso', 'success');
