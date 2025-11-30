@@ -15,6 +15,9 @@
     <!-- Leaflet Routing Machine CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" >
 
+    <!-- Leaflet Rotate CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.css" >
+
     <style>
         :root {
             --primary: #2563eb;
@@ -1934,6 +1937,23 @@
             white-space: nowrap;
         }
 
+        /* Botão Bússola */
+        .compass-btn {
+            flex-direction: column;
+            gap: 4px;
+            padding: 10px;
+        }
+
+        .compass-btn #compassIcon {
+            transition: transform 0.3s ease;
+        }
+
+        .rotation-angle {
+            font-size: 11px;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
         /* Contador de Entregas */
         .delivery-counter {
             background: white;
@@ -2232,6 +2252,16 @@
                 </svg>
             </button>
 
+            <!-- Botão Bússola (resetar rotação) -->
+            <button class="map-control-btn compass-btn" id="compassBtn" title="Resetar orientação (Norte)" onclick="resetMapRotation()" style="display: none;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" id="compassIcon">
+                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2zm0 2.83l5 12.87L12 15.17 6 17.7l6-12.87z"/>
+                    <circle cx="12" cy="12" r="1.5"/>
+                    <text x="12" y="8" text-anchor="middle" font-size="6" font-weight="bold" fill="currentColor">N</text>
+                </svg>
+                <span class="rotation-angle" id="rotationAngle">0°</span>
+            </button>
+
             <!-- Contador de Entregas -->
             <div class="delivery-counter" id="deliveryCounter" style="display: none;">
                 <div class="counter-label">Entregas</div>
@@ -2454,6 +2484,9 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet Rotate JS (suporte para rotação 360°) -->
+    <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 
     <!-- Leaflet Routing Machine JS -->
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
@@ -3219,7 +3252,12 @@
                 // Configurações de zoom
                 zoomSnap: 1,
                 zoomDelta: 1,
-                wheelPxPerZoomLevel: 60
+                wheelPxPerZoomLevel: 60,
+                // Habilitar rotação 360° (gesto de dois dedos no mobile)
+                rotate: true,
+                bearing: 0,  // Ângulo inicial (0 = Norte para cima)
+                touchRotate: true,  // Permitir rotação por toque (mobile)
+                rotateControl: false  // Não mostrar controle de rotação padrão (vamos criar customizado)
             }).setView([lat, lng], isMobile ? 18 : 17);
 
             // Criar layers de Google Maps com tiles Retina (textos e ícones em tamanho normal do Google Maps)
@@ -3281,6 +3319,12 @@
 
             // Bind popup mas NÃO abrir automaticamente (para evitar interferência com visualização de rotas)
             state.currentLocationMarker.bindPopup('<b>Você está aqui</b>');
+
+            // Adicionar evento de rotação do mapa (atualizar bússola)
+            state.map.on('rotate', updateCompassIndicator);
+
+            // Atualizar bússola no início
+            updateCompassIndicator();
 
             // Corrigir tamanho do mapa após inicialização (importante para quando container estava oculto)
             setTimeout(() => {
@@ -4303,6 +4347,49 @@
             setTimeout(() => {
                 btn.style.transform = 'scale(1) rotate(0deg)';
             }, 300);
+        }
+
+        // Resetar rotação do mapa (Norte para cima)
+        window.resetMapRotation = function() {
+            if (!state.map) return;
+
+            state.map.setBearing(0, {
+                animate: true,
+                duration: 0.5
+            });
+
+            // Efeito visual no botão
+            const btn = document.getElementById('compassBtn');
+            btn.style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                btn.style.transform = 'scale(1)';
+            }, 300);
+        }
+
+        // Atualizar indicador de rotação da bússola
+        function updateCompassIndicator() {
+            if (!state.map) return;
+
+            const bearing = state.map.getBearing();
+            const compassBtn = document.getElementById('compassBtn');
+            const compassIcon = document.getElementById('compassIcon');
+            const rotationAngle = document.getElementById('rotationAngle');
+
+            // Arredondar para inteiro
+            const angle = Math.round(bearing);
+
+            // Atualizar texto do ângulo
+            rotationAngle.textContent = angle + '°';
+
+            // Rotacionar o ícone da bússola no sentido oposto ao mapa
+            compassIcon.style.transform = `rotate(${-angle}deg)`;
+
+            // Mostrar/ocultar botão da bússola baseado na rotação
+            if (Math.abs(angle) > 5) {
+                compassBtn.style.display = 'flex';
+            } else {
+                compassBtn.style.display = 'none';
+            }
         }
 
         // Atualizar contador de entregas
