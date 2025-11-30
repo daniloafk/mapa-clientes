@@ -4020,25 +4020,10 @@
             const totalStops = optimizedOrder.length;
             const usePrettyIcons = !isMobile || totalStops <= 10;
 
-            // Não usar offset de coordenadas quando rotação está habilitada
-            // (offset geográfico causa bug de flutuação durante rotação/zoom)
-            function getAdjustedCoordinates(lat, lng, index) {
-                // Retornar coordenadas originais sem ajuste
-                // Os marcadores vão sobrepor se estiverem no mesmo local,
-                // mas isso é melhor do que ficarem flutuando durante rotação
-                return [lat, lng];
-            }
-
             // Reconstruir marcadores com status atualizado
             optimizedOrder.forEach((originalIndex, routeIndex) => {
                 const stop = state.routeData[originalIndex];
                 if (!stop || !stop.latitude || !stop.longitude) return;
-
-                const [adjustedLat, adjustedLng] = getAdjustedCoordinates(
-                    stop.latitude,
-                    stop.longitude,
-                    routeIndex
-                );
 
                 const stopNumber = routeIndex + 1;
                 const isDelivered = state.deliveredStops.has(routeIndex);
@@ -4047,7 +4032,7 @@
 
                 // Mobile com MUITAS paradas: usar CircleMarker simples
                 if (isMobile && !usePrettyIcons) {
-                    const circleMarker = L.circleMarker([adjustedLat, adjustedLng], {
+                    const circleMarker = L.circleMarker([stop.latitude, stop.longitude], {
                         radius: 12,
                         fillColor: color,
                         color: '#fff',
@@ -4162,7 +4147,7 @@
                     iconAnchor: packageCount > 1 ? [20, 55] : [20, 40]
                 });
 
-                const marker = L.marker([adjustedLat, adjustedLng], {
+                const marker = L.marker([stop.latitude, stop.longitude], {
                     icon: numberedIcon,
                     title: `Parada ${stopNumber}: ${stop.address}`
                 }).addTo(state.map);
@@ -4176,6 +4161,15 @@
                         ? stop.packages.join(', ')
                         : `${stop.packages.slice(0, isMobile ? 5 : 10).join(', ')}... (+${stop.packages.length - (isMobile ? 5 : 10)})`)
                     : stop.spxTn || '-';
+
+                // Calcular distância da localização atual até esta parada
+                let distanceInfo = '';
+                if (state.currentLocationMarker) {
+                    const currentPos = state.currentLocationMarker.getLatLng();
+                    const distKm = calculateDistance(currentPos.lat, currentPos.lng, stop.latitude, stop.longitude);
+                    const estTime = calculateEstimatedTime(distKm);
+                    distanceInfo = `<p style="margin: 4px 0; padding: 6px; background: #eff6ff; border-radius: 4px; font-size: ${isMobile ? '11px' : '12px'};"><strong>🚗 Distância:</strong> ${formatDistance(distKm)} · <strong>⏱️</strong> ${estTime}</p>`;
+                }
 
                 const popupContent = isMobile ? `
                     <div class="popup-content" style="max-width: 250px;">
