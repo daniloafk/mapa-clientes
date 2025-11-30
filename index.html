@@ -5917,25 +5917,34 @@
             statusEl.style.display = 'block';
 
             try {
-                // Salvar temporariamente a API Key no state para testar
-                const previousKey = state.googleMapsApiKey;
-                state.googleMapsApiKey = apiKey;
+                // Testar chamada direta à API (sem proxy CORS)
+                const apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=-23.5505,-46.6333&destination=-22.9099,-47.0626&mode=driving&language=pt-BR&key=${apiKey}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
 
-                // Fazer uma requisição de teste real (São Paulo → Campinas - ~100km)
-                const testResult = await fetchFromGoogleMaps(
-                    -23.5505, // São Paulo (lat)
-                    -46.6333, // São Paulo (lng)
-                    -22.9099, // Campinas (lat)
-                    -47.0626  // Campinas (lng)
-                );
+                console.log('🧪 Testando API Key do Google Maps...');
 
-                // Restaurar key anterior
-                state.googleMapsApiKey = previousKey;
+                const response = await fetch(proxyUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
 
-                if (testResult && testResult.coordinates && testResult.coordinates.length > 1) {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const proxyData = await response.json();
+                const data = JSON.parse(proxyData.contents);
+
+                console.log('📊 Resposta da API:', data);
+
+                if (data.status === 'OK' && data.routes && data.routes.length > 0) {
                     // Sucesso!
-                    const distanceKm = (testResult.distance / 1000).toFixed(1);
-                    const durationMin = Math.round(testResult.duration / 60);
+                    const route = data.routes[0];
+                    const leg = route.legs[0];
+                    const distanceKm = (leg.distance.value / 1000).toFixed(1);
+                    const durationMin = Math.round(leg.duration.value / 60);
 
                     statusEl.innerHTML = `✅ <strong>API Key VÁLIDA!</strong><br>
                         <small>Teste: São Paulo → Campinas (${distanceKm}km, ~${durationMin}min)</small><br>
@@ -5943,17 +5952,28 @@
                     statusEl.style.background = '#d1fae5';
                     statusEl.style.color = '#065f46';
                     showToast('✅ API Key válida e funcionando!', 'success');
-                } else {
-                    // Falhou - pode ser key inválida, API não ativada, ou problema de permissão
-                    statusEl.innerHTML = `❌ <strong>Erro ao usar API Key</strong><br>
-                        <small>Possíveis causas:</small><br>
-                        <small>• API Key inválida ou expirada</small><br>
+                } else if (data.status === 'REQUEST_DENIED') {
+                    statusEl.innerHTML = `❌ <strong>Acesso Negado</strong><br>
+                        <small>• API Key inválida ou desativada</small><br>
                         <small>• Directions API não ativada no projeto</small><br>
-                        <small>• Restrições da API Key bloqueando uso</small><br>
                         <small>• Verifique o Console do Google Cloud</small>`;
                     statusEl.style.background = '#fee2e2';
                     statusEl.style.color = '#991b1b';
-                    showToast('❌ API Key não funcionou', 'error');
+                    showToast('❌ Acesso negado pela API', 'error');
+                } else if (data.status === 'OVER_QUERY_LIMIT') {
+                    statusEl.innerHTML = `⚠️ <strong>Limite de consultas excedido</strong><br>
+                        <small>• Aguarde alguns minutos e teste novamente</small><br>
+                        <small>• Ou verifique seu plano no Google Cloud</small>`;
+                    statusEl.style.background = '#fef3c7';
+                    statusEl.style.color = '#92400e';
+                    showToast('⚠️ Limite de consultas excedido', 'warning');
+                } else {
+                    statusEl.innerHTML = `❌ <strong>Erro: ${data.status || 'Desconhecido'}</strong><br>
+                        <small>${data.error_message || 'Verifique sua API Key e configurações'}</small><br>
+                        <small>• API Key: ${apiKey.substring(0, 10)}...</small>`;
+                    statusEl.style.background = '#fee2e2';
+                    statusEl.style.color = '#991b1b';
+                    showToast(`❌ Erro: ${data.status}`, 'error');
                 }
 
             } catch (error) {
@@ -7061,15 +7081,20 @@ Retorne a ordem otimizada:`;
 
             // Usar proxy CORS para evitar bloqueio
             const apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&mode=driving&language=pt-BR&key=${state.googleMapsApiKey}`;
-            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
 
-            console.log('🗺️ Google Maps: Testando rota...');
+            console.log('🗺️ Google Maps: Buscando rota...');
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             try {
-                const response = await fetch(url, { signal: controller.signal });
+                const response = await fetch(proxyUrl, {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
                 clearTimeout(timeoutId);
 
                 if (!response.ok) {
@@ -7077,7 +7102,9 @@ Retorne a ordem otimizada:`;
                     return null;
                 }
 
-                const data = await response.json();
+                const proxyData = await response.json();
+                const data = JSON.parse(proxyData.contents);
+
                 console.log('Google Maps resposta:', data);
 
                 if (data.status === 'OK' && data.routes && data.routes.length > 0) {
