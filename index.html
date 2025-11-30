@@ -2061,21 +2061,21 @@
     <div class="user-header-info" id="userHeaderInfo" style="display: none;">
         <span id="currentUsername">Usuário</span>
         <button class="admin-btn" id="openAdminBtn" style="display: none;">👥 Admin</button>
-        <button class="admin-btn" id="openSettingsBtn">⚙️ Config</button>
+        <button class="admin-btn" id="openSettingsBtn" style="display: none;">⚙️ Config</button>
         <button class="logout-btn" id="logoutBtn">Sair</button>
     </div>
 
     <!-- Settings Panel -->
     <div class="admin-panel" id="settingsPanel">
         <div class="admin-header">
-            <h1>⚙️ Configurações</h1>
+            <h1>⚙️ Configurações Globais</h1>
             <button class="close-admin-btn" id="closeSettingsBtn">×</button>
         </div>
         <div class="admin-content">
             <div style="background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">🗺️ Google Maps API</h3>
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">🗺️ Google Maps API (Global)</h3>
                 <p style="margin: 0 0 16px 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
-                    Para rotas mais precisas, configure sua API Key do Google Maps (gratuita até 28.500 rotas/mês).
+                    ⚠️ <strong>Configuração para TODAS as contas!</strong> Configure uma vez e todos os usuários terão rotas mais precisas com Google Maps (gratuita até 28.500 rotas/mês).
                     <a href="https://console.cloud.google.com/" target="_blank" style="color: #2563eb;">Obter API Key gratuita →</a>
                 </p>
                 <div style="margin-bottom: 12px;">
@@ -2583,6 +2583,77 @@
             return false;
         }
 
+        // ========== CONFIGURAÇÕES GLOBAIS ==========
+
+        // Carregar configurações globais (API Key, etc)
+        async function loadGlobalSettings() {
+            if (!state.useSupabase) return;
+
+            try {
+                // Buscar configuração global (usaremos um registro fixo com id=1)
+                const { data, error } = await supabase
+                    .from('settings')
+                    .select('*')
+                    .eq('id', 1)
+                    .single();
+
+                if (!error && data && data.google_maps_api_key) {
+                    state.googleMapsApiKey = data.google_maps_api_key;
+                    console.log('✅ API Key do Google Maps carregada');
+                }
+            } catch (error) {
+                console.warn('Configurações globais não encontradas (normal na primeira vez)');
+            }
+        }
+
+        // Salvar configuração global da API Key (apenas admin)
+        async function saveGlobalSettings(apiKey) {
+            if (!state.useSupabase) {
+                showToast('Erro: Supabase não configurado', 'error');
+                return false;
+            }
+
+            // Verificar se é admin
+            if (!state.currentUser || state.currentUser.role !== 'admin') {
+                showToast('Erro: Apenas administradores podem alterar configurações', 'error');
+                return false;
+            }
+
+            try {
+                // Tentar atualizar primeiro
+                const { data: existingData } = await supabase
+                    .from('settings')
+                    .select('id')
+                    .eq('id', 1)
+                    .single();
+
+                if (existingData) {
+                    // Atualizar registro existente
+                    const { error } = await supabase
+                        .from('settings')
+                        .update({ google_maps_api_key: apiKey })
+                        .eq('id', 1);
+
+                    if (error) throw error;
+                } else {
+                    // Criar novo registro
+                    const { error } = await supabase
+                        .from('settings')
+                        .insert([{ id: 1, google_maps_api_key: apiKey }]);
+
+                    if (error) throw error;
+                }
+
+                state.googleMapsApiKey = apiKey;
+                return true;
+
+            } catch (error) {
+                console.error('Erro ao salvar configurações:', error);
+                showToast('Erro ao salvar configurações', 'error');
+                return false;
+            }
+        }
+
         // Login
         async function login(username, password) {
             if (!state.useSupabase) {
@@ -2618,6 +2689,9 @@
 
                 // eslint-disable-next-line no-restricted-globals
                 localStorage.setItem('gps_user', JSON.stringify(state.currentUser));
+
+                // Carregar configuração global da API Key
+                await loadGlobalSettings();
 
                 await showApp();
                 return true;
@@ -2759,11 +2833,13 @@
             document.getElementById('userHeaderInfo').style.display = 'flex';
             document.getElementById('currentUsername').textContent = state.currentUser.username;
 
-            // Mostrar botão admin apenas para administradores
+            // Mostrar botões admin apenas para administradores
             if (state.currentUser.role === 'admin') {
                 document.getElementById('openAdminBtn').style.display = 'block';
+                document.getElementById('openSettingsBtn').style.display = 'block';
             } else {
                 document.getElementById('openAdminBtn').style.display = 'none';
+                document.getElementById('openSettingsBtn').style.display = 'none';
             }
 
             // Inicializar mapa se ainda não foi inicializado
@@ -5581,13 +5657,18 @@
         });
 
         // Open Settings Panel
-        document.getElementById('openSettingsBtn').addEventListener('click', () => {
+        document.getElementById('openSettingsBtn').addEventListener('click', async () => {
             const panel = document.getElementById('settingsPanel');
             panel.classList.add('active');
+
+            // Recarregar configurações do Supabase (caso outro admin tenha alterado)
+            await loadGlobalSettings();
 
             // Carregar API Key salva no state (se houver)
             if (state.googleMapsApiKey) {
                 document.getElementById('googleMapsApiKey').value = state.googleMapsApiKey;
+            } else {
+                document.getElementById('googleMapsApiKey').value = '';
             }
         });
 
@@ -5596,43 +5677,80 @@
             document.getElementById('settingsPanel').classList.remove('active');
         });
 
-        // Save API Key
-        document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
+        // Save API Key (salva no Supabase para todos os usuários)
+        document.getElementById('saveApiKeyBtn').addEventListener('click', async () => {
             const apiKey = document.getElementById('googleMapsApiKey').value.trim();
             const statusEl = document.getElementById('apiKeyStatus');
+            const saveBtn = document.getElementById('saveApiKeyBtn');
 
-            if (apiKey) {
-                state.googleMapsApiKey = apiKey;
-                statusEl.textContent = '✅ API Key salva com sucesso! As rotas agora usarão Google Maps.';
-                statusEl.style.background = '#d1fae5';
-                statusEl.style.color = '#065f46';
-                statusEl.style.display = 'block';
-
-                showToast('API Key do Google Maps configurada com sucesso!', 'success');
-            } else {
+            if (!apiKey) {
                 statusEl.textContent = '⚠️ Por favor, insira uma API Key válida.';
                 statusEl.style.background = '#fee2e2';
                 statusEl.style.color = '#991b1b';
                 statusEl.style.display = 'block';
+                setTimeout(() => statusEl.style.display = 'none', 5000);
+                return;
             }
+
+            // Desabilitar botão enquanto salva
+            saveBtn.disabled = true;
+            saveBtn.textContent = '💾 Salvando...';
+
+            const success = await saveGlobalSettings(apiKey);
+
+            if (success) {
+                statusEl.textContent = '✅ API Key salva! Todas as contas agora usarão Google Maps.';
+                statusEl.style.background = '#d1fae5';
+                statusEl.style.color = '#065f46';
+                statusEl.style.display = 'block';
+
+                showToast('API Key configurada para todas as contas!', 'success');
+            } else {
+                statusEl.textContent = '❌ Erro ao salvar API Key. Tente novamente.';
+                statusEl.style.background = '#fee2e2';
+                statusEl.style.color = '#991b1b';
+                statusEl.style.display = 'block';
+            }
+
+            // Restaurar botão
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Salvar';
 
             setTimeout(() => {
                 statusEl.style.display = 'none';
             }, 5000);
         });
 
-        // Clear API Key
-        document.getElementById('clearApiKeyBtn').addEventListener('click', () => {
-            state.googleMapsApiKey = null;
-            document.getElementById('googleMapsApiKey').value = '';
-
+        // Clear API Key (remove do Supabase)
+        document.getElementById('clearApiKeyBtn').addEventListener('click', async () => {
             const statusEl = document.getElementById('apiKeyStatus');
-            statusEl.textContent = '🗑️ API Key removida. Usando APIs gratuitas (OSRM e GraphHopper).';
-            statusEl.style.background = '#dbeafe';
-            statusEl.style.color = '#1e40af';
-            statusEl.style.display = 'block';
+            const clearBtn = document.getElementById('clearApiKeyBtn');
 
-            showToast('API Key removida. Usando APIs gratuitas.', 'success');
+            // Desabilitar botão enquanto remove
+            clearBtn.disabled = true;
+            clearBtn.textContent = '🗑️ Removendo...';
+
+            const success = await saveGlobalSettings(null); // Salvar null = remover
+
+            if (success) {
+                document.getElementById('googleMapsApiKey').value = '';
+
+                statusEl.textContent = '🗑️ API Key removida. Todas as contas usarão APIs gratuitas.';
+                statusEl.style.background = '#dbeafe';
+                statusEl.style.color = '#1e40af';
+                statusEl.style.display = 'block';
+
+                showToast('API Key removida. Usando APIs gratuitas.', 'success');
+            } else {
+                statusEl.textContent = '❌ Erro ao remover API Key.';
+                statusEl.style.background = '#fee2e2';
+                statusEl.style.color = '#991b1b';
+                statusEl.style.display = 'block';
+            }
+
+            // Restaurar botão
+            clearBtn.disabled = false;
+            clearBtn.textContent = '🗑️ Limpar';
 
             setTimeout(() => {
                 statusEl.style.display = 'none';
