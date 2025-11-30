@@ -6522,7 +6522,67 @@ Retorne a ordem otimizada:`;
             return `${lat1.toFixed(5)},${lng1.toFixed(5)}-${lat2.toFixed(5)},${lng2.toFixed(5)}`;
         }
 
-        // Buscar rota usando OSRM
+        // API 1: Google Maps Directions (MELHOR E MAIS PRECISO - PRIORIDADE MÁXIMA)
+        async function fetchFromGoogleMaps(startLat, startLng, endLat, endLng, timeout = 5000) {
+            // Usar proxy CORS para acessar Google Maps Directions
+            const url = `https://routes.googleapis.com/directions/v2:computeRoutes`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline'
+                    },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        origin: {
+                            location: {
+                                latLng: {
+                                    latitude: startLat,
+                                    longitude: startLng
+                                }
+                            }
+                        },
+                        destination: {
+                            location: {
+                                latLng: {
+                                    latitude: endLat,
+                                    longitude: endLng
+                                }
+                            }
+                        },
+                        travelMode: 'DRIVE',
+                        routingPreference: 'TRAFFIC_AWARE',
+                        languageCode: 'pt-BR'
+                    })
+                });
+
+                clearTimeout(timeoutId);
+                const data = await response.json();
+
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const coordinates = decodePolyline(route.polyline.encodedPolyline);
+
+                    return {
+                        coordinates: coordinates,
+                        distance: route.distanceMeters,
+                        duration: parseInt(route.duration.replace('s', '')),
+                        source: 'Google Maps'
+                    };
+                }
+                return null;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                return null;
+            }
+        }
+
+        // API 2: Buscar rota usando OSRM
         async function fetchFromOSRM(startLat, startLng, endLat, endLng, timeout = 3000) {
             const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
 
@@ -6643,8 +6703,9 @@ Retorne a ordem otimizada:`;
                 return routeCache.get(cacheKey);
             }
 
-            // Lista de todas as APIs disponíveis para tentar
+            // Lista de todas as APIs disponíveis para tentar (GOOGLE MAPS EM PRIMEIRO!)
             const apis = [
+                { name: 'Google Maps', func: fetchFromGoogleMaps },
                 { name: 'OSRM', func: fetchFromOSRM },
                 { name: 'GraphHopper', func: fetchFromGraphHopper },
                 { name: 'OpenRouteService', func: fetchFromOpenRouteService },
