@@ -1512,6 +1512,59 @@
             background: var(--bg-primary);
         }
 
+        .login-form input.error {
+            border-color: var(--danger);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .login-form input.success {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .error-message {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid var(--danger);
+            color: var(--danger);
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin: 16px 0;
+            font-size: 14px;
+            animation: slideDown 0.3s ease;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .error-message strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .field-error {
+            color: var(--danger);
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .field-error.show {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .login-btn {
             width: 100%;
             padding: 14px;
@@ -1917,13 +1970,18 @@
                 <p>Faça login para acessar o sistema</p>
             </div>
             <form class="login-form" id="loginForm">
+                <!-- Mensagem de erro geral -->
+                <div class="error-message" id="loginError"></div>
+
                 <div class="form-group">
                     <label for="loginUsername">Usuário</label>
                     <input type="text" id="loginUsername" required autocomplete="username">
+                    <div class="field-error" id="loginUsernameError"></div>
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Senha</label>
                     <input type="password" id="loginPassword" required autocomplete="current-password">
+                    <div class="field-error" id="loginPasswordError"></div>
                 </div>
                 <button type="submit" class="login-btn" id="loginBtn">Entrar</button>
             </form>
@@ -1942,21 +2000,28 @@
                 <p>Preencha os dados para criar sua conta</p>
             </div>
             <form class="login-form" id="registerForm">
+                <!-- Mensagem de erro geral -->
+                <div class="error-message" id="registerError"></div>
+
                 <div class="form-group">
                     <label for="registerName">Nome Completo *</label>
                     <input type="text" id="registerName" required placeholder="Digite seu nome completo">
+                    <div class="field-error" id="registerNameError"></div>
                 </div>
                 <div class="form-group">
                     <label for="registerUsername">Usuário *</label>
                     <input type="text" id="registerUsername" required placeholder="Escolha um nome de usuário" autocomplete="username">
+                    <div class="field-error" id="registerUsernameError"></div>
                 </div>
                 <div class="form-group">
                     <label for="registerPassword">Senha *</label>
                     <input type="password" id="registerPassword" required placeholder="Escolha uma senha" autocomplete="new-password">
+                    <div class="field-error" id="registerPasswordError"></div>
                 </div>
                 <div class="form-group">
                     <label for="registerPasswordConfirm">Confirmar Senha *</label>
                     <input type="password" id="registerPasswordConfirm" required placeholder="Digite a senha novamente" autocomplete="new-password">
+                    <div class="field-error" id="registerPasswordConfirmError"></div>
                 </div>
                 <button type="submit" class="login-btn" id="registerBtn">Criar Conta</button>
             </form>
@@ -5096,6 +5161,152 @@
             }
         }
 
+        // ========== FUNÇÕES DE VALIDAÇÃO E MENSAGENS DE ERRO ==========
+
+        // Mostrar erro geral
+        function showFormError(formType, message) {
+            const errorEl = document.getElementById(`${formType}Error`);
+            if (errorEl) {
+                errorEl.innerHTML = `<strong>❌ Erro</strong> ${message}`;
+                errorEl.classList.add('show');
+
+                // Auto-hide após 5 segundos
+                setTimeout(() => {
+                    errorEl.classList.remove('show');
+                }, 5000);
+            }
+        }
+
+        // Mostrar erro de campo específico
+        function showFieldError(fieldId, message) {
+            const errorEl = document.getElementById(`${fieldId}Error`);
+            const inputEl = document.getElementById(fieldId);
+
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.add('show');
+            }
+
+            if (inputEl) {
+                inputEl.classList.add('error');
+                inputEl.classList.remove('success');
+            }
+        }
+
+        // Limpar erro de campo específico
+        function clearFieldError(fieldId) {
+            const errorEl = document.getElementById(`${fieldId}Error`);
+            const inputEl = document.getElementById(fieldId);
+
+            if (errorEl) {
+                errorEl.classList.remove('show');
+            }
+
+            if (inputEl) {
+                inputEl.classList.remove('error');
+            }
+        }
+
+        // Marcar campo como válido
+        function markFieldSuccess(fieldId) {
+            const inputEl = document.getElementById(fieldId);
+
+            if (inputEl) {
+                inputEl.classList.remove('error');
+                inputEl.classList.add('success');
+            }
+        }
+
+        // Limpar todos os erros de um formulário
+        function clearFormErrors(formType) {
+            const errorEl = document.getElementById(`${formType}Error`);
+            if (errorEl) {
+                errorEl.classList.remove('show');
+            }
+
+            // Limpar todos os inputs do formulário
+            const form = document.getElementById(`${formType}Form`);
+            if (form) {
+                const inputs = form.querySelectorAll('input');
+                inputs.forEach(input => {
+                    input.classList.remove('error', 'success');
+                });
+
+                const fieldErrors = form.querySelectorAll('.field-error');
+                fieldErrors.forEach(error => {
+                    error.classList.remove('show');
+                });
+            }
+        }
+
+        // Validar campo em tempo real
+        function validateField(fieldId, validationFn) {
+            const inputEl = document.getElementById(fieldId);
+            if (!inputEl) return;
+
+            inputEl.addEventListener('input', () => {
+                clearFieldError(fieldId);
+                const error = validationFn(inputEl.value);
+
+                if (error) {
+                    showFieldError(fieldId, error);
+                } else if (inputEl.value.length > 0) {
+                    markFieldSuccess(fieldId);
+                }
+            });
+
+            inputEl.addEventListener('blur', () => {
+                const error = validationFn(inputEl.value);
+                if (error && inputEl.value.length > 0) {
+                    showFieldError(fieldId, error);
+                }
+            });
+        }
+
+        // Validações específicas
+        function validateUsername(value) {
+            if (!value || value.trim().length === 0) {
+                return 'Usuário é obrigatório';
+            }
+            if (value.length < 3) {
+                return 'Usuário deve ter pelo menos 3 caracteres';
+            }
+            if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+                return 'Usuário pode conter apenas letras, números, _ e -';
+            }
+            return null;
+        }
+
+        function validatePassword(value) {
+            if (!value || value.length === 0) {
+                return 'Senha é obrigatória';
+            }
+            if (value.length < 4) {
+                return 'Senha deve ter pelo menos 4 caracteres';
+            }
+            return null;
+        }
+
+        function validateName(value) {
+            if (!value || value.trim().length === 0) {
+                return 'Nome é obrigatório';
+            }
+            if (value.trim().length < 3) {
+                return 'Nome deve ter pelo menos 3 caracteres';
+            }
+            return null;
+        }
+
+        function validatePasswordConfirm(password, confirm) {
+            if (!confirm || confirm.length === 0) {
+                return 'Confirmação de senha é obrigatória';
+            }
+            if (password !== confirm) {
+                return 'As senhas não coincidem';
+            }
+            return null;
+        }
+
         // ========== EVENT LISTENERS - AUTENTICAÇÃO ==========
 
         // Login Form
@@ -5105,11 +5316,29 @@
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Limpar erros anteriores
+            clearFormErrors('login');
+
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
 
-            if (!username || !password) {
-                showToast('Por favor, preencha todos os campos', 'warning');
+            // Validar campos
+            let hasError = false;
+
+            const usernameError = validateUsername(username);
+            if (usernameError) {
+                showFieldError('loginUsername', usernameError);
+                hasError = true;
+            }
+
+            const passwordError = validatePassword(password);
+            if (passwordError) {
+                showFieldError('loginPassword', passwordError);
+                hasError = true;
+            }
+
+            if (hasError) {
+                showFormError('login', 'Por favor, corrija os erros antes de continuar');
                 return;
             }
 
@@ -5124,6 +5353,10 @@
 
             if (success) {
                 loginForm.reset();
+                clearFormErrors('login');
+            } else {
+                // Mostrar erro de login
+                showFormError('login', 'Usuário ou senha incorretos. Verifique seus dados e tente novamente.');
             }
         });
 
@@ -5146,29 +5379,92 @@
             registerContainer.classList.add('hidden');
             loginContainer.classList.remove('hidden');
             registerForm.reset();
+            clearFormErrors('register');
+        });
+
+        // ========== VALIDAÇÕES EM TEMPO REAL ==========
+
+        // Login - validações em tempo real
+        validateField('loginUsername', validateUsername);
+        validateField('loginPassword', validatePassword);
+
+        // Registro - validações em tempo real
+        validateField('registerName', validateName);
+        validateField('registerUsername', validateUsername);
+        validateField('registerPassword', validatePassword);
+
+        // Validação especial para confirmação de senha (precisa comparar com a senha)
+        const registerPasswordInput = document.getElementById('registerPassword');
+        const registerPasswordConfirmInput = document.getElementById('registerPasswordConfirm');
+
+        registerPasswordConfirmInput.addEventListener('input', () => {
+            clearFieldError('registerPasswordConfirm');
+            const password = registerPasswordInput.value;
+            const confirm = registerPasswordConfirmInput.value;
+
+            if (confirm.length > 0) {
+                const error = validatePasswordConfirm(password, confirm);
+                if (error) {
+                    showFieldError('registerPasswordConfirm', error);
+                } else {
+                    markFieldSuccess('registerPasswordConfirm');
+                }
+            }
+        });
+
+        registerPasswordConfirmInput.addEventListener('blur', () => {
+            const password = registerPasswordInput.value;
+            const confirm = registerPasswordConfirmInput.value;
+
+            if (confirm.length > 0) {
+                const error = validatePasswordConfirm(password, confirm);
+                if (error) {
+                    showFieldError('registerPasswordConfirm', error);
+                }
+            }
         });
 
         // Processar cadastro
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Limpar erros anteriores
+            clearFormErrors('register');
+
             const name = document.getElementById('registerName').value.trim();
             const username = document.getElementById('registerUsername').value.trim();
             const password = document.getElementById('registerPassword').value;
             const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
 
-            if (!name || !username || !password || !passwordConfirm) {
-                showToast('Por favor, preencha todos os campos', 'warning');
-                return;
+            // Validar todos os campos
+            let hasError = false;
+
+            const nameError = validateName(name);
+            if (nameError) {
+                showFieldError('registerName', nameError);
+                hasError = true;
             }
 
-            if (password !== passwordConfirm) {
-                showToast('As senhas não coincidem', 'error');
-                return;
+            const usernameError = validateUsername(username);
+            if (usernameError) {
+                showFieldError('registerUsername', usernameError);
+                hasError = true;
             }
 
-            if (password.length < 6) {
-                showToast('A senha deve ter no mínimo 6 caracteres', 'warning');
+            const passwordError = validatePassword(password);
+            if (passwordError) {
+                showFieldError('registerPassword', passwordError);
+                hasError = true;
+            }
+
+            const passwordConfirmError = validatePasswordConfirm(password, passwordConfirm);
+            if (passwordConfirmError) {
+                showFieldError('registerPasswordConfirm', passwordConfirmError);
+                hasError = true;
+            }
+
+            if (hasError) {
+                showFormError('register', 'Por favor, corrija os erros antes de continuar');
                 return;
             }
 
@@ -5179,11 +5475,15 @@
 
             if (success) {
                 registerForm.reset();
+                clearFormErrors('register');
                 registerContainer.classList.add('hidden');
                 loginContainer.classList.remove('hidden');
                 // Preencher username no login
                 document.getElementById('loginUsername').value = username;
                 document.getElementById('loginPassword').focus();
+                showToast('✅ Conta criada com sucesso! Faça login para continuar.', 'success');
+            } else {
+                showFormError('register', 'Erro ao criar conta. O usuário pode já estar em uso. Tente outro nome de usuário.');
             }
 
             registerBtn.disabled = false;
