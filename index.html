@@ -3757,8 +3757,11 @@
             confirmModal.style.zIndex = '10000';
             confirmModal.style.padding = isMobile ? '16px' : '0';
 
+            // Detectar dark mode
+            const isDarkMode = document.documentElement.classList.contains('dark');
+
             const modalContent = document.createElement('div');
-            modalContent.style.background = 'white';
+            modalContent.style.background = isDarkMode ? '#1f2937' : 'white';
             modalContent.style.padding = isMobile ? '20px' : '24px';
             modalContent.style.borderRadius = '12px';
             modalContent.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
@@ -3774,7 +3777,7 @@
 
             const message = document.createElement('p');
             message.style.margin = '0 0 20px 0';
-            message.style.color = '#6b7280';
+            message.style.color = isDarkMode ? '#d1d5db' : '#6b7280';
             message.style.fontSize = isMobile ? '13px' : '14px';
             message.style.lineHeight = '1.5';
             message.textContent = 'Tem certeza que deseja excluir esta parada? Esta ação não pode ser desfeita.';
@@ -7377,6 +7380,12 @@ Retorne a ordem otimizada:`;
 
             // Salvar rota otimizada no Supabase
             saveOptimizedRouteToSupabase(optimizedOrder);
+
+            // Limpar cache de rotas se estiver muito grande (>100 rotas)
+            if (routeCache.size > 100) {
+                console.log(`🧹 Limpando cache de rotas (${routeCache.size} entradas)`);
+                routeCache.clear();
+            }
 
             // Fechar TODOS os popups, incluindo o "Você está aqui"
             state.map.closePopup();
