@@ -5699,43 +5699,58 @@
             testBtn.disabled = true;
             testBtn.textContent = '🧪 Testando...';
 
-            statusEl.textContent = '⏳ Testando conexão com Google Maps API...';
+            statusEl.textContent = '⏳ Testando Google Maps API...';
             statusEl.style.background = '#dbeafe';
             statusEl.style.color = '#1e40af';
             statusEl.style.display = 'block';
 
             try {
-                // Fazer requisição de teste (São Paulo -> Rio de Janeiro)
-                const testUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=-23.5505,-46.6333&destination=-22.9068,-43.1729&mode=driving&key=${apiKey}`;
+                // Salvar temporariamente a API Key no state para testar
+                const previousKey = state.googleMapsApiKey;
+                state.googleMapsApiKey = apiKey;
 
-                const response = await fetch(testUrl);
-                const data = await response.json();
+                // Fazer uma requisição de teste real (São Paulo → Campinas - ~100km)
+                const testResult = await fetchFromGoogleMaps(
+                    -23.5505, // São Paulo (lat)
+                    -46.6333, // São Paulo (lng)
+                    -22.9099, // Campinas (lat)
+                    -47.0626  // Campinas (lng)
+                );
 
-                if (data.status === 'OK') {
-                    statusEl.textContent = '✅ API Key VÁLIDA! Google Maps está funcionando perfeitamente.';
+                // Restaurar key anterior
+                state.googleMapsApiKey = previousKey;
+
+                if (testResult && testResult.coordinates && testResult.coordinates.length > 1) {
+                    // Sucesso!
+                    const distanceKm = (testResult.distance / 1000).toFixed(1);
+                    const durationMin = Math.round(testResult.duration / 60);
+
+                    statusEl.innerHTML = `✅ <strong>API Key VÁLIDA!</strong><br>
+                        <small>Teste: São Paulo → Campinas (${distanceKm}km, ~${durationMin}min)</small><br>
+                        <small>Google Maps funcionando perfeitamente! 🎉</small>`;
                     statusEl.style.background = '#d1fae5';
                     statusEl.style.color = '#065f46';
-                    showToast('API Key válida e funcionando!', 'success');
-                } else if (data.status === 'REQUEST_DENIED') {
-                    statusEl.innerHTML = `❌ API Key INVÁLIDA ou sem permissão.<br><small>Erro: ${data.error_message || 'Verifique se ativou a Directions API'}</small>`;
-                    statusEl.style.background = '#fee2e2';
-                    statusEl.style.color = '#991b1b';
-                    showToast('API Key inválida!', 'error');
-                } else if (data.status === 'OVER_QUERY_LIMIT') {
-                    statusEl.textContent = '⚠️ Limite de requisições excedido. Aguarde ou aumente o limite.';
-                    statusEl.style.background = '#fef3c7';
-                    statusEl.style.color = '#92400e';
+                    showToast('✅ API Key válida e funcionando!', 'success');
                 } else {
-                    statusEl.innerHTML = `⚠️ Erro ao testar: ${data.status}<br><small>${data.error_message || ''}</small>`;
+                    // Falhou - pode ser key inválida, API não ativada, ou problema de permissão
+                    statusEl.innerHTML = `❌ <strong>Erro ao usar API Key</strong><br>
+                        <small>Possíveis causas:</small><br>
+                        <small>• API Key inválida ou expirada</small><br>
+                        <small>• Directions API não ativada no projeto</small><br>
+                        <small>• Restrições da API Key bloqueando uso</small><br>
+                        <small>• Verifique o Console do Google Cloud</small>`;
                     statusEl.style.background = '#fee2e2';
                     statusEl.style.color = '#991b1b';
+                    showToast('❌ API Key não funcionou', 'error');
                 }
 
             } catch (error) {
-                statusEl.textContent = `❌ Erro de conexão: ${error.message}`;
+                statusEl.innerHTML = `❌ <strong>Erro ao testar:</strong> ${error.message}<br>
+                    <small>Verifique o console do navegador (F12) para mais detalhes</small>`;
                 statusEl.style.background = '#fee2e2';
                 statusEl.style.color = '#991b1b';
                 console.error('Erro ao testar API Key:', error);
+                showToast('❌ Erro ao testar API Key', 'error');
             }
 
             // Restaurar botão
@@ -5745,7 +5760,7 @@
             // Manter mensagem visível por mais tempo
             setTimeout(() => {
                 statusEl.style.display = 'none';
-            }, 10000); // 10 segundos
+            }, 15000); // 15 segundos
         });
 
         // Save API Key (salva no Supabase para todos os usuários)
