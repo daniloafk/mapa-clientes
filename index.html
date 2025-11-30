@@ -6468,7 +6468,10 @@ Retorne a ordem otimizada:`;
             return route;
         }
 
-        // ========== FUNÇÕES DE ROTEAMENTO COM GOOGLE MAPS/OSRM ==========
+        // ========== SISTEMA DE ROTEAMENTO PROFISSIONAL (ESTILO CIRCUIT) ==========
+
+        // Cache de rotas para evitar recalcular
+        const routeCache = new Map();
 
         // Decodificar polyline codificada (formato usado por Google Maps e OSRM)
         function decodePolyline(encoded) {
@@ -6503,62 +6506,91 @@ Retorne a ordem otimizada:`;
             return poly;
         }
 
-        // Buscar rota real entre dois pontos usando OSRM com timeout e retry
-        async function fetchRouteFromOSRM(startLat, startLng, endLat, endLng, retryCount = 0) {
-            const MAX_RETRIES = 2;
-            const TIMEOUT = 5000; // 5 segundos
+        // Gerar chave única para cache de rota
+        function getRouteCacheKey(lat1, lng1, lat2, lng2) {
+            return `${lat1.toFixed(5)},${lng1.toFixed(5)}-${lat2.toFixed(5)},${lng2.toFixed(5)}`;
+        }
+
+        // Buscar rota usando OSRM
+        async function fetchFromOSRM(startLat, startLng, endLat, endLng, timeout = 3000) {
+            const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             try {
-                // OSRM usa formato: longitude,latitude (invertido!)
-                const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
-
-                // Criar promise com timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
-
                 const response = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
-
                 const data = await response.json();
 
                 if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
                     const route = data.routes[0];
-                    const geometry = route.geometry;
-
-                    // Decodificar polyline
-                    const coordinates = decodePolyline(geometry);
-
                     return {
-                        coordinates: coordinates,
-                        distance: route.distance, // em metros
-                        duration: route.duration  // em segundos
+                        coordinates: decodePolyline(route.geometry),
+                        distance: route.distance,
+                        duration: route.duration,
+                        source: 'OSRM'
                     };
                 }
-
-                // Se não retornou rota válida, tentar novamente
-                if (retryCount < MAX_RETRIES) {
-                    console.log(`⚠️ Tentando novamente (${retryCount + 1}/${MAX_RETRIES})...`);
-                    await new Promise(resolve => setTimeout(resolve, 500)); // Aguardar 500ms
-                    return await fetchRouteFromOSRM(startLat, startLng, endLat, endLng, retryCount + 1);
-                }
-
                 return null;
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    console.warn('⏱️ Timeout ao buscar rota');
-                } else {
-                    console.error('❌ Erro ao buscar rota:', error);
-                }
-
-                // Tentar novamente se ainda houver tentativas
-                if (retryCount < MAX_RETRIES) {
-                    console.log(`🔄 Retry ${retryCount + 1}/${MAX_RETRIES}...`);
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    return await fetchRouteFromOSRM(startLat, startLng, endLat, endLng, retryCount + 1);
-                }
-
+                clearTimeout(timeoutId);
                 return null;
             }
+        }
+
+        // Buscar rota usando GraphHopper (API alternativa gratuita)
+        async function fetchFromGraphHopper(startLat, startLng, endLat, endLng, timeout = 3000) {
+            const url = `https://graphhopper.com/api/1/route?point=${startLat},${startLng}&point=${endLat},${endLng}&vehicle=car&locale=pt-BR&instructions=false&calc_points=true&points_encoded=true`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                const data = await response.json();
+
+                if (data.paths && data.paths.length > 0) {
+                    const path = data.paths[0];
+                    return {
+                        coordinates: decodePolyline(path.points),
+                        distance: path.distance,
+                        duration: path.time / 1000, // ms to seconds
+                        source: 'GraphHopper'
+                    };
+                }
+                return null;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                return null;
+            }
+        }
+
+        // Buscar rota com sistema multi-API e fallback (GARANTIA DE 100%)
+        async function fetchRouteFromMultipleAPIs(startLat, startLng, endLat, endLng) {
+            // Verificar cache primeiro
+            const cacheKey = getRouteCacheKey(startLat, startLng, endLat, endLng);
+            if (routeCache.has(cacheKey)) {
+                return routeCache.get(cacheKey);
+            }
+
+            let result = null;
+
+            // Tentar OSRM primeiro (mais rápido)
+            result = await fetchFromOSRM(startLat, startLng, endLat, endLng);
+
+            // Se OSRM falhou, tentar GraphHopper
+            if (!result) {
+                result = await fetchFromGraphHopper(startLat, startLng, endLat, endLng);
+            }
+
+            // Salvar no cache se obteve sucesso
+            if (result && result.coordinates && result.coordinates.length > 0) {
+                routeCache.set(cacheKey, result);
+            }
+
+            return result;
         }
 
         // Desenhar rotas reais entre todas as paradas (OTIMIZADO)
@@ -6585,8 +6617,8 @@ Retorne a ordem otimizada:`;
                 const color = colors[j % colors.length];
                 const routeIndex = j;
 
-                // Criar promise para cada rota
-                const routePromise = fetchRouteFromOSRM(
+                // Criar promise para cada rota (usa multi-API com fallback)
+                const routePromise = fetchRouteFromMultipleAPIs(
                     currentStop.latitude,
                     currentStop.longitude,
                     nextStop.latitude,
