@@ -4183,6 +4183,15 @@
                         : `${stop.packages.slice(0, isMobile ? 5 : 10).join(', ')}... (+${stop.packages.length - (isMobile ? 5 : 10)})`)
                     : stop.spxTn || '-';
 
+                // Calcular distância e tempo da localização atual até esta parada
+                let distanceInfo = '';
+                if (state.currentLocationMarker) {
+                    const currentPos = state.currentLocationMarker.getLatLng();
+                    const distKm = calculateDistance(currentPos.lat, currentPos.lng, stop.latitude, stop.longitude);
+                    const estTime = calculateEstimatedTime(distKm);
+                    distanceInfo = `<p style="margin: 4px 0; padding: 6px; background: #eff6ff; border-radius: 4px; font-size: ${isMobile ? '11px' : '12px'};"><strong>🚗 Distância:</strong> ${formatDistance(distKm)} · <strong>⏱️</strong> ${estTime}</p>`;
+                }
+
                 const popupContent = isMobile ? `
                     <div class="popup-content" style="max-width: 250px;">
                         <h3 style="margin: 0 0 8px 0; font-size: 16px;">${isDelivered ? '✅' : '🚚'} Parada ${stopNumber}</h3>
