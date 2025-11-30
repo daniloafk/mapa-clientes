@@ -3797,23 +3797,45 @@
                         .filter((_, idx) => idx !== stopIndex)
                         .map(oldIdx => oldIdx > originalIndex ? oldIdx - 1 : oldIdx);
 
-                    // Remover do set de paradas entregues se estiver lá
-                    state.deliveredStops.delete(stopIndex);
+                    // Remover do set de paradas entregues e ajustar índices
+                    const newDeliveredStops = new Set();
+                    state.deliveredStops.forEach(idx => {
+                        if (idx < stopIndex) {
+                            newDeliveredStops.add(idx);
+                        } else if (idx > stopIndex) {
+                            newDeliveredStops.add(idx - 1);
+                        }
+                        // Se idx === stopIndex, não adiciona (remove a parada)
+                    });
+                    state.deliveredStops = newDeliveredStops;
 
                     // Salvar no Supabase
                     if (state.useSupabase && state.currentUser) {
-                        // Salvar dados atualizados
-                        await saveToSupabase();
+                        // Salvar dados atualizados de rota
+                        await saveRouteDataToSupabase(state.routeData);
 
                         // Salvar rota otimizada atualizada
                         await saveOptimizedRouteToSupabase(state.optimizedOrder);
 
-                        // Deletar status de entrega desta parada
+                        // Deletar todos os status de entrega (será recriado conforme necessário)
                         await supabase
                             .from('delivery_status')
                             .delete()
-                            .eq('user_id', state.currentUser.id)
-                            .eq('stop_index', stopIndex);
+                            .eq('user_id', state.currentUser.id);
+
+                        // Recriar status de entregas atualizados
+                        if (state.deliveredStops.size > 0) {
+                            const deliveryRecords = Array.from(state.deliveredStops).map(idx => ({
+                                user_id: state.currentUser.id,
+                                stop_index: idx,
+                                is_delivered: true,
+                                delivered_at: new Date().toISOString()
+                            }));
+
+                            await supabase
+                                .from('delivery_status')
+                                .insert(deliveryRecords);
+                        }
                     }
 
                     // Redesenhar mapa
@@ -3824,7 +3846,7 @@
                     console.log(`🗑️ Parada ${stopIndex} excluída`);
                 } catch (error) {
                     console.error('Erro ao excluir parada:', error);
-                    showToast('Erro ao excluir parada', 'error');
+                    showToast(`Erro ao excluir parada: ${error.message}`, 'error');
                 }
             };
         }
