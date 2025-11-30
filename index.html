@@ -3740,9 +3740,11 @@
 
         // Excluir parada
         window.deleteStop = async function(stopIndex) {
+            // Detectar se é mobile
+            const isMobile = window.innerWidth <= 768;
+
             // Confirmar exclusão com modal customizado
             const confirmModal = document.createElement('div');
-            confirmModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
             confirmModal.style.position = 'fixed';
             confirmModal.style.top = '0';
             confirmModal.style.left = '0';
@@ -3753,32 +3755,86 @@
             confirmModal.style.alignItems = 'center';
             confirmModal.style.justifyContent = 'center';
             confirmModal.style.zIndex = '10000';
+            confirmModal.style.padding = isMobile ? '16px' : '0';
 
-            confirmModal.innerHTML = `
-                <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-width: 400px; width: 90%;">
-                    <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #dc2626; font-weight: bold;">🗑️ Excluir parada?</h3>
-                    <p style="margin: 0 0 20px 0; color: #6b7280; font-size: 14px;">
-                        Tem certeza que deseja excluir esta parada? Esta ação não pode ser desfeita.
-                    </p>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="cancelDelete" style="flex: 1; padding: 10px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px;">
-                            Cancelar
-                        </button>
-                        <button id="confirmDelete" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px;">
-                            Excluir
-                        </button>
-                    </div>
-                </div>
-            `;
+            const modalContent = document.createElement('div');
+            modalContent.style.background = 'white';
+            modalContent.style.padding = isMobile ? '20px' : '24px';
+            modalContent.style.borderRadius = '12px';
+            modalContent.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+            modalContent.style.maxWidth = '400px';
+            modalContent.style.width = isMobile ? '100%' : '90%';
+
+            const title = document.createElement('h3');
+            title.style.margin = '0 0 12px 0';
+            title.style.fontSize = isMobile ? '16px' : '18px';
+            title.style.color = '#dc2626';
+            title.style.fontWeight = 'bold';
+            title.textContent = '🗑️ Excluir parada?';
+
+            const message = document.createElement('p');
+            message.style.margin = '0 0 20px 0';
+            message.style.color = '#6b7280';
+            message.style.fontSize = isMobile ? '13px' : '14px';
+            message.style.lineHeight = '1.5';
+            message.textContent = 'Tem certeza que deseja excluir esta parada? Esta ação não pode ser desfeita.';
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.display = 'flex';
+            buttonContainer.style.gap = '10px';
+            buttonContainer.style.flexDirection = isMobile ? 'column' : 'row';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.style.flex = '1';
+            cancelBtn.style.padding = isMobile ? '14px 16px' : '10px';
+            cancelBtn.style.background = '#e5e7eb';
+            cancelBtn.style.color = '#374151';
+            cancelBtn.style.border = 'none';
+            cancelBtn.style.borderRadius = '6px';
+            cancelBtn.style.cursor = 'pointer';
+            cancelBtn.style.fontWeight = 'bold';
+            cancelBtn.style.fontSize = isMobile ? '15px' : '14px';
+            cancelBtn.style.minHeight = isMobile ? '44px' : 'auto';
+            cancelBtn.style.touchAction = 'manipulation';
+            cancelBtn.textContent = 'Cancelar';
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.style.flex = '1';
+            confirmBtn.style.padding = isMobile ? '14px 16px' : '10px';
+            confirmBtn.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+            confirmBtn.style.color = 'white';
+            confirmBtn.style.border = 'none';
+            confirmBtn.style.borderRadius = '6px';
+            confirmBtn.style.cursor = 'pointer';
+            confirmBtn.style.fontWeight = 'bold';
+            confirmBtn.style.fontSize = isMobile ? '15px' : '14px';
+            confirmBtn.style.minHeight = isMobile ? '44px' : 'auto';
+            confirmBtn.style.touchAction = 'manipulation';
+            confirmBtn.textContent = 'Excluir';
+
+            buttonContainer.appendChild(cancelBtn);
+            buttonContainer.appendChild(confirmBtn);
+
+            modalContent.appendChild(title);
+            modalContent.appendChild(message);
+            modalContent.appendChild(buttonContainer);
+            confirmModal.appendChild(modalContent);
 
             document.body.appendChild(confirmModal);
 
             // Adicionar eventos aos botões
-            document.getElementById('cancelDelete').onclick = () => {
+            cancelBtn.onclick = () => {
                 document.body.removeChild(confirmModal);
             };
 
-            document.getElementById('confirmDelete').onclick = async () => {
+            // Fechar ao clicar fora do modal
+            confirmModal.onclick = (e) => {
+                if (e.target === confirmModal) {
+                    document.body.removeChild(confirmModal);
+                }
+            };
+
+            confirmBtn.onclick = async () => {
                 document.body.removeChild(confirmModal);
 
                 try {
