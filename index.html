@@ -1890,6 +1890,21 @@
             -webkit-backface-visibility: hidden;
         }
 
+        /* CSS para suportar rotação do mapa (Leaflet.Rotate) */
+        .leaflet-container {
+            transform-origin: center center;
+        }
+
+        .leaflet-pane,
+        .leaflet-tile-pane,
+        .leaflet-overlay-pane,
+        .leaflet-shadow-pane,
+        .leaflet-marker-pane,
+        .leaflet-tooltip-pane,
+        .leaflet-popup-pane {
+            transform-origin: center center;
+        }
+
         /* Controles do Mapa (estilo Amazon Flex) */
         .map-controls {
             position: absolute;
@@ -3234,6 +3249,12 @@
             // Detectar mobile
             const isMobile = window.innerWidth <= 768;
 
+            // Verificar se o mapa já foi inicializado
+            if (state.map) {
+                console.log('⚠️ Mapa já existe, não inicializando novamente');
+                return;
+            }
+
             state.map = L.map('map', {
                 zoomControl: false,
                 preferCanvas: false,  // Usar SVG para compatibilidade com rotação
@@ -3255,6 +3276,13 @@
                 touchRotate: true,  // Permitir rotação por toque (mobile)
                 rotateControl: false  // Não mostrar controle de rotação padrão (vamos criar customizado)
             }).setView([lat, lng], isMobile ? 18 : 17);
+
+            // Verificar se o plugin de rotação foi carregado corretamente
+            if (state.map.setBearing) {
+                console.log('✅ Leaflet.Rotate plugin carregado com sucesso');
+            } else {
+                console.error('❌ Leaflet.Rotate plugin NÃO foi carregado!');
+            }
 
             // Criar layers de Google Maps com tiles Retina (textos e ícones em tamanho normal do Google Maps)
             const googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&scale=2', {
@@ -7701,7 +7729,7 @@ Retorne a ordem otimizada:`;
             updateDeliveryCounter();
 
             // Desenhar rotas reais usando dados do Google Maps/OSRM
-            await drawRealRoutes(optimizedOrder, colors, isMobile);
+            await drawRealRoutes(optimizedOrder, null, isMobile);
 
             // Fechar aba lateral em mobile para melhor visualização
             const sidebar = document.querySelector('.sidebar');
