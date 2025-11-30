@@ -6060,9 +6060,9 @@
             statusEl.style.display = 'block';
 
             try {
-                // Testar chamada direta à API (sem proxy CORS)
+                // Testar chamada usando proxy CORS confiável
                 const apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=-23.5505,-46.6333&destination=-22.9099,-47.0626&mode=driving&language=pt-BR&key=${apiKey}`;
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
 
                 console.log('🧪 Testando API Key do Google Maps...');
 
@@ -6077,8 +6077,7 @@
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                const proxyData = await response.json();
-                const data = JSON.parse(proxyData.contents);
+                const data = await response.json();
 
                 console.log('📊 Resposta da API:', data);
 
@@ -7222,9 +7221,9 @@ Retorne a ordem otimizada:`;
                 return null;
             }
 
-            // Usar proxy CORS para evitar bloqueio
+            // Usar proxy CORS confiável
             const apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&mode=driving&language=pt-BR&key=${state.googleMapsApiKey}`;
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
 
             console.log('🗺️ Google Maps: Buscando rota...');
 
@@ -7245,8 +7244,7 @@ Retorne a ordem otimizada:`;
                     return null;
                 }
 
-                const proxyData = await response.json();
-                const data = JSON.parse(proxyData.contents);
+                const data = await response.json();
 
                 console.log('Google Maps resposta:', data);
 
