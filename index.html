@@ -3738,6 +3738,97 @@
             }
         }
 
+        // Excluir parada
+        window.deleteStop = async function(stopIndex) {
+            // Confirmar exclusão com modal customizado
+            const confirmModal = document.createElement('div');
+            confirmModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            confirmModal.style.position = 'fixed';
+            confirmModal.style.top = '0';
+            confirmModal.style.left = '0';
+            confirmModal.style.right = '0';
+            confirmModal.style.bottom = '0';
+            confirmModal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            confirmModal.style.display = 'flex';
+            confirmModal.style.alignItems = 'center';
+            confirmModal.style.justifyContent = 'center';
+            confirmModal.style.zIndex = '10000';
+
+            confirmModal.innerHTML = `
+                <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-width: 400px; width: 90%;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #dc2626; font-weight: bold;">🗑️ Excluir parada?</h3>
+                    <p style="margin: 0 0 20px 0; color: #6b7280; font-size: 14px;">
+                        Tem certeza que deseja excluir esta parada? Esta ação não pode ser desfeita.
+                    </p>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="cancelDelete" style="flex: 1; padding: 10px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px;">
+                            Cancelar
+                        </button>
+                        <button id="confirmDelete" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px;">
+                            Excluir
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(confirmModal);
+
+            // Adicionar eventos aos botões
+            document.getElementById('cancelDelete').onclick = () => {
+                document.body.removeChild(confirmModal);
+            };
+
+            document.getElementById('confirmDelete').onclick = async () => {
+                document.body.removeChild(confirmModal);
+
+                try {
+                    // Verificar se há ordem otimizada
+                    if (!state.optimizedOrder || state.optimizedOrder.length === 0) {
+                        showToast('Nenhuma rota otimizada encontrada', 'error');
+                        return;
+                    }
+
+                    // Remover parada do array de dados
+                    const originalIndex = state.optimizedOrder[stopIndex];
+                    state.routeData.splice(originalIndex, 1);
+
+                    // Reconstruir ordem otimizada (ajustar índices)
+                    state.optimizedOrder = state.optimizedOrder
+                        .filter((_, idx) => idx !== stopIndex)
+                        .map(oldIdx => oldIdx > originalIndex ? oldIdx - 1 : oldIdx);
+
+                    // Remover do set de paradas entregues se estiver lá
+                    state.deliveredStops.delete(stopIndex);
+
+                    // Salvar no Supabase
+                    if (state.useSupabase && state.currentUser) {
+                        // Salvar dados atualizados
+                        await saveToSupabase();
+
+                        // Salvar rota otimizada atualizada
+                        await saveOptimizedRouteToSupabase(state.optimizedOrder);
+
+                        // Deletar status de entrega desta parada
+                        await supabase
+                            .from('delivery_status')
+                            .delete()
+                            .eq('user_id', state.currentUser.id)
+                            .eq('stop_index', stopIndex);
+                    }
+
+                    // Redesenhar mapa
+                    redrawOptimizedRoute();
+                    updateDeliveryCounter();
+
+                    showToast('🗑️ Parada excluída com sucesso', 'success');
+                    console.log(`🗑️ Parada ${stopIndex} excluída`);
+                } catch (error) {
+                    console.error('Erro ao excluir parada:', error);
+                    showToast('Erro ao excluir parada', 'error');
+                }
+            };
+        }
+
         // Carregar status de entrega do Supabase
         async function loadDeliveryStatusFromSupabase() {
             if (!state.useSupabase || !state.currentUser) return;
@@ -4001,6 +4092,10 @@
                             style="margin-top: 6px; width: 100%; padding: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
                             🧭 Navegar até aqui
                         </button>
+                        <button onclick="deleteStop(${routeIndex})"
+                            style="margin-top: 6px; width: 100%; padding: 10px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                            🗑️ Excluir parada
+                        </button>
                     </div>
                 ` : `
                     <div class="popup-content">
@@ -4026,6 +4121,10 @@
                         <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
                             style="margin-top: 8px; width: 100%; padding: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                             🧭 Navegar até aqui
+                        </button>
+                        <button onclick="deleteStop(${routeIndex})"
+                            style="margin-top: 8px; width: 100%; padding: 10px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            🗑️ Excluir parada
                         </button>
                     </div>
                 `;
@@ -7409,6 +7508,10 @@ Retorne a ordem otimizada:`;
                             style="margin-top: 6px; width: 100%; padding: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
                             🧭 Navegar até aqui
                         </button>
+                        <button onclick="deleteStop(${routeIndex})"
+                            style="margin-top: 6px; width: 100%; padding: 10px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;">
+                            🗑️ Excluir parada
+                        </button>
                     </div>
                 ` : `
                     <div class="popup-content">
@@ -7434,6 +7537,10 @@ Retorne a ordem otimizada:`;
                         <button onclick="startNavigationToStop(${stop.latitude}, ${stop.longitude}, '${stop.address.replace(/'/g, "\\'")}', ${stopNumber})"
                             style="margin-top: 8px; width: 100%; padding: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                             🧭 Navegar até aqui
+                        </button>
+                        <button onclick="deleteStop(${routeIndex})"
+                            style="margin-top: 8px; width: 100%; padding: 10px; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            🗑️ Excluir parada
                         </button>
                     </div>
                 `;
