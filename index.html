@@ -6522,68 +6522,13 @@ Retorne a ordem otimizada:`;
             return `${lat1.toFixed(5)},${lng1.toFixed(5)}-${lat2.toFixed(5)},${lng2.toFixed(5)}`;
         }
 
-        // API 1: Google Maps Directions (MELHOR E MAIS PRECISO - PRIORIDADE MÁXIMA)
-        async function fetchFromGoogleMaps(startLat, startLng, endLat, endLng, timeout = 5000) {
-            // Usar proxy CORS para acessar Google Maps Directions
-            const url = `https://routes.googleapis.com/directions/v2:computeRoutes`;
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline'
-                    },
-                    signal: controller.signal,
-                    body: JSON.stringify({
-                        origin: {
-                            location: {
-                                latLng: {
-                                    latitude: startLat,
-                                    longitude: startLng
-                                }
-                            }
-                        },
-                        destination: {
-                            location: {
-                                latLng: {
-                                    latitude: endLat,
-                                    longitude: endLng
-                                }
-                            }
-                        },
-                        travelMode: 'DRIVE',
-                        routingPreference: 'TRAFFIC_AWARE',
-                        languageCode: 'pt-BR'
-                    })
-                });
-
-                clearTimeout(timeoutId);
-                const data = await response.json();
-
-                if (data.routes && data.routes.length > 0) {
-                    const route = data.routes[0];
-                    const coordinates = decodePolyline(route.polyline.encodedPolyline);
-
-                    return {
-                        coordinates: coordinates,
-                        distance: route.distanceMeters,
-                        duration: parseInt(route.duration.replace('s', '')),
-                        source: 'Google Maps'
-                    };
-                }
-                return null;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                return null;
-            }
+        // Função auxiliar para aguardar um delay
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        // API 2: Buscar rota usando OSRM
-        async function fetchFromOSRM(startLat, startLng, endLat, endLng, timeout = 3000) {
+        // API 1: OSRM (Prioridade 1 - Mais rápido e confiável)
+        async function fetchFromOSRM(startLat, startLng, endLat, endLng, timeout = 8000) {
             const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
 
             const controller = new AbortController();
@@ -6592,26 +6537,39 @@ Retorne a ordem otimizada:`;
             try {
                 const response = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    console.warn(`OSRM HTTP ${response.status}`);
+                    return null;
+                }
+
                 const data = await response.json();
 
                 if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
                     const route = data.routes[0];
-                    return {
-                        coordinates: decodePolyline(route.geometry),
-                        distance: route.distance,
-                        duration: route.duration,
-                        source: 'OSRM'
-                    };
+                    const coords = decodePolyline(route.geometry);
+
+                    if (coords && coords.length > 1) {
+                        return {
+                            coordinates: coords,
+                            distance: route.distance,
+                            duration: route.duration,
+                            source: 'OSRM'
+                        };
+                    }
                 }
                 return null;
             } catch (error) {
                 clearTimeout(timeoutId);
+                if (error.name !== 'AbortError') {
+                    console.warn('OSRM erro:', error.message);
+                }
                 return null;
             }
         }
 
-        // Buscar rota usando GraphHopper (API alternativa gratuita)
-        async function fetchFromGraphHopper(startLat, startLng, endLat, endLng, timeout = 3000) {
+        // API 2: GraphHopper (Prioridade 2 - Backup do OSRM)
+        async function fetchFromGraphHopper(startLat, startLng, endLat, endLng, timeout = 8000) {
             const url = `https://graphhopper.com/api/1/route?point=${startLat},${startLng}&point=${endLat},${endLng}&vehicle=car&locale=pt-BR&instructions=false&calc_points=true&points_encoded=true`;
 
             const controller = new AbortController();
@@ -6620,135 +6578,82 @@ Retorne a ordem otimizada:`;
             try {
                 const response = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    console.warn(`GraphHopper HTTP ${response.status}`);
+                    return null;
+                }
+
                 const data = await response.json();
 
                 if (data.paths && data.paths.length > 0) {
                     const path = data.paths[0];
-                    return {
-                        coordinates: decodePolyline(path.points),
-                        distance: path.distance,
-                        duration: path.time / 1000, // ms to seconds
-                        source: 'GraphHopper'
-                    };
+                    const coords = decodePolyline(path.points);
+
+                    if (coords && coords.length > 1) {
+                        return {
+                            coordinates: coords,
+                            distance: path.distance,
+                            duration: path.time / 1000, // ms to seconds
+                            source: 'GraphHopper'
+                        };
+                    }
                 }
                 return null;
             } catch (error) {
                 clearTimeout(timeoutId);
-                return null;
-            }
-        }
-
-        // API 3: OpenRouteService (free, open source)
-        async function fetchFromOpenRouteService(startLat, startLng, endLat, endLng, timeout = 3000) {
-            const url = `https://api.openrouteservice.org/v2/directions/driving-car?start=${startLng},${startLat}&end=${endLng},${endLat}`;
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                const data = await response.json();
-
-                if (data.features && data.features.length > 0) {
-                    const feature = data.features[0];
-                    const coords = feature.geometry.coordinates.map(coord => [coord[1], coord[0]]); // Inverter [lng,lat] para [lat,lng]
-                    return {
-                        coordinates: coords,
-                        distance: feature.properties.segments[0].distance,
-                        duration: feature.properties.segments[0].duration,
-                        source: 'OpenRouteService'
-                    };
+                if (error.name !== 'AbortError') {
+                    console.warn('GraphHopper erro:', error.message);
                 }
                 return null;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                return null;
             }
         }
 
-        // API 4: Valhalla (free, open source - demo server)
-        async function fetchFromValhalla(startLat, startLng, endLat, endLng, timeout = 3000) {
-            const url = `https://valhalla1.openstreetmap.de/route?json={"locations":[{"lat":${startLat},"lon":${startLng}},{"lat":${endLat},"lon":${endLng}}],"costing":"auto","directions_options":{"units":"kilometers"}}`;
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                const data = await response.json();
-
-                if (data.trip && data.trip.legs && data.trip.legs.length > 0) {
-                    const leg = data.trip.legs[0];
-                    return {
-                        coordinates: decodePolyline(leg.shape),
-                        distance: leg.summary.length * 1000, // km to meters
-                        duration: leg.summary.time,
-                        source: 'Valhalla'
-                    };
-                }
-                return null;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                return null;
-            }
-        }
-
-        // Buscar rota com sistema multi-API, retries agressivos e ZERO fallback de linha reta
-        async function fetchRouteFromMultipleAPIs(startLat, startLng, endLat, endLng, maxRetries = 5) {
+        // Buscar rota com retry - Sistema simplificado e robusto (SOMENTE APIs TESTADAS)
+        async function fetchRouteFromMultipleAPIs(startLat, startLng, endLat, endLng, maxRetries = 3) {
             // Verificar cache primeiro
             const cacheKey = getRouteCacheKey(startLat, startLng, endLat, endLng);
             if (routeCache.has(cacheKey)) {
                 return routeCache.get(cacheKey);
             }
 
-            // Lista de todas as APIs disponíveis para tentar (GOOGLE MAPS EM PRIMEIRO!)
+            // Usar apenas as 2 APIs mais confiáveis e testadas
             const apis = [
-                { name: 'Google Maps', func: fetchFromGoogleMaps },
                 { name: 'OSRM', func: fetchFromOSRM },
-                { name: 'GraphHopper', func: fetchFromGraphHopper },
-                { name: 'OpenRouteService', func: fetchFromOpenRouteService },
-                { name: 'Valhalla', func: fetchFromValhalla }
+                { name: 'GraphHopper', func: fetchFromGraphHopper }
             ];
 
-            let result = null;
-            let attempts = 0;
-
-            // Tentar até conseguir uma rota real ou esgotar as tentativas
-            while (!result && attempts < maxRetries) {
-                attempts++;
-
-                // Tentar cada API em sequência
+            // Tentar cada API até 3 vezes
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 for (const api of apis) {
                     try {
-                        result = await api.func(startLat, startLng, endLat, endLng);
+                        const result = await api.func(startLat, startLng, endLat, endLng);
 
                         if (result && result.coordinates && result.coordinates.length > 1) {
-                            console.log(`✅ Rota obtida de ${api.name} (tentativa ${attempts})`);
+                            console.log(`✅ ${api.name} OK (tentativa ${attempt})`);
                             // Salvar no cache
                             routeCache.set(cacheKey, result);
                             return result;
                         }
                     } catch (error) {
-                        console.warn(`⚠️ Erro em ${api.name}:`, error.message);
+                        console.warn(`⚠️ ${api.name} falhou (tentativa ${attempt}):`, error.message);
                     }
                 }
 
-                // Se todas as APIs falharam nesta tentativa, aguardar antes de retry
-                if (!result && attempts < maxRetries) {
-                    const delay = Math.min(1000 * Math.pow(2, attempts - 1), 5000); // Exponential backoff até 5s
-                    console.log(`⏳ Retry ${attempts}/${maxRetries} em ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                // Aguardar antes de próxima tentativa (apenas se não for a última)
+                if (attempt < maxRetries) {
+                    const delayMs = 1000 * attempt; // 1s, 2s, 3s
+                    console.log(`⏳ Aguardando ${delayMs}ms antes de retry...`);
+                    await delay(delayMs);
                 }
             }
 
             // Se chegou aqui, todas as tentativas falharam
-            console.error(`❌ ERRO: Não foi possível obter rota real após ${maxRetries} tentativas em ${apis.length} APIs`);
-            return null; // NUNCA retornar linha reta - deixar null para o drawRealRoutes tratar
+            console.error(`❌ Não foi possível obter rota após ${maxRetries} tentativas`);
+            return null;
         }
 
-        // Desenhar rotas reais entre todas as paradas (SOMENTE ROTAS REAIS - SEM LINHAS RETAS)
+        // Desenhar rotas reais entre todas as paradas (PROCESSAMENTO EM LOTES - MAIS ESTÁVEL)
         async function drawRealRoutes(optimizedOrder, colors, isMobile) {
             console.log('🗺️ Buscando rotas reais baseadas em estradas...');
 
@@ -6762,77 +6667,88 @@ Retorne a ordem otimizada:`;
             let routesDrawn = 0;
             let routesFailed = 0;
 
-            // PROCESSAR TODAS AS ROTAS EM PARALELO
             const totalRoutes = optimizedOrder.length - 1;
-            const allPromises = [];
+            const BATCH_SIZE = 10; // Processar 10 rotas por vez para não sobrecarregar APIs
 
-            for (let j = 0; j < totalRoutes; j++) {
-                const currentStop = state.routeData[optimizedOrder[j]];
-                const nextStop = state.routeData[optimizedOrder[j + 1]];
-                const color = colors[j % colors.length];
-                const routeIndex = j;
+            // Processar rotas em lotes
+            for (let batchStart = 0; batchStart < totalRoutes; batchStart += BATCH_SIZE) {
+                const batchEnd = Math.min(batchStart + BATCH_SIZE, totalRoutes);
+                const batchPromises = [];
 
-                // Criar promise para cada rota (multi-API com retry agressivo)
-                const routePromise = fetchRouteFromMultipleAPIs(
-                    currentStop.latitude,
-                    currentStop.longitude,
-                    nextStop.latitude,
-                    nextStop.longitude
-                ).then(routeData => {
-                    if (routeData && routeData.coordinates && routeData.coordinates.length > 1) {
-                        // ✅ SUCESSO: Desenhar polyline com a rota real baseada em estradas
-                        const polyline = L.polyline(routeData.coordinates, {
-                            color: color,
-                            weight: isMobile ? 4 : 5,
-                            opacity: 0.8,
-                            smoothFactor: 1
-                        }).addTo(state.map);
+                console.log(`📦 Processando lote ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(totalRoutes / BATCH_SIZE)} (rotas ${batchStart + 1}-${batchEnd})`);
 
-                        state.routePolylines.push(polyline);
+                // Criar promises para este lote
+                for (let j = batchStart; j < batchEnd; j++) {
+                    const currentStop = state.routeData[optimizedOrder[j]];
+                    const nextStop = state.routeData[optimizedOrder[j + 1]];
+                    const color = colors[j % colors.length];
+                    const routeIndex = j;
 
-                        totalDistance += routeData.distance;
-                        totalDuration += routeData.duration;
-                        routesDrawn++;
+                    const routePromise = fetchRouteFromMultipleAPIs(
+                        currentStop.latitude,
+                        currentStop.longitude,
+                        nextStop.latitude,
+                        nextStop.longitude
+                    ).then(routeData => {
+                        if (routeData && routeData.coordinates && routeData.coordinates.length > 1) {
+                            // ✅ SUCESSO: Desenhar rota real
+                            const polyline = L.polyline(routeData.coordinates, {
+                                color: color,
+                                weight: isMobile ? 4 : 5,
+                                opacity: 0.8,
+                                smoothFactor: 1
+                            }).addTo(state.map);
 
-                        // Atualizar progresso em tempo real
-                        const progress = Math.round(((routesDrawn + routesFailed) / totalRoutes) * 100);
-                        if (routeStatus) {
-                            routeStatus.textContent = `🗺️ ${routesDrawn}/${totalRoutes} rotas reais • ${progress}%`;
+                            state.routePolylines.push(polyline);
+                            totalDistance += routeData.distance;
+                            totalDuration += routeData.duration;
+                            routesDrawn++;
+
+                            // Atualizar progresso
+                            const progress = Math.round(((routesDrawn + routesFailed) / totalRoutes) * 100);
+                            if (routeStatus) {
+                                routeStatus.textContent = `🗺️ ${routesDrawn}/${totalRoutes} rotas • ${progress}%`;
+                            }
+
+                            return { success: true, routeIndex };
+                        } else {
+                            // ❌ FALHA: Não desenhar linha reta
+                            console.warn(`⚠️ Rota ${routeIndex + 1}→${routeIndex + 2} falhou`);
+                            routesFailed++;
+
+                            const progress = Math.round(((routesDrawn + routesFailed) / totalRoutes) * 100);
+                            if (routeStatus) {
+                                routeStatus.textContent = `⚠️ ${routesDrawn}/${totalRoutes} rotas • ${routesFailed} falhas • ${progress}%`;
+                            }
+
+                            return { success: false, routeIndex };
                         }
-
-                        return { success: true, data: routeData };
-                    } else {
-                        // ❌ FALHA: Não foi possível obter rota real - NÃO desenhar linha reta
-                        console.error(`❌ FALHA: Parada ${routeIndex + 1} → ${routeIndex + 2} - Rota real não disponível`);
+                    }).catch(error => {
+                        console.error(`❌ Erro rota ${routeIndex + 1}:`, error.message);
                         routesFailed++;
 
-                        // Atualizar progresso
                         const progress = Math.round(((routesDrawn + routesFailed) / totalRoutes) * 100);
                         if (routeStatus) {
-                            routeStatus.textContent = `⚠️ ${routesDrawn}/${totalRoutes} rotas reais • ${routesFailed} falhas • ${progress}%`;
+                            routeStatus.textContent = `⚠️ ${routesDrawn}/${totalRoutes} rotas • ${routesFailed} falhas • ${progress}%`;
                         }
 
-                        return { success: false, routeIndex };
-                    }
-                }).catch(error => {
-                    // ❌ ERRO: Não desenhar linha reta - apenas registrar falha
-                    console.error(`❌ ERRO na rota ${routeIndex + 1} → ${routeIndex + 2}:`, error);
-                    routesFailed++;
+                        return { success: false, routeIndex, error };
+                    });
 
-                    // Atualizar progresso
-                    const progress = Math.round(((routesDrawn + routesFailed) / totalRoutes) * 100);
-                    if (routeStatus) {
-                        routeStatus.textContent = `⚠️ ${routesDrawn}/${totalRoutes} rotas reais • ${routesFailed} falhas • ${progress}%`;
-                    }
+                    batchPromises.push(routePromise);
+                }
 
-                    return { success: false, error, routeIndex };
-                });
+                // Aguardar este lote completar antes de prosseguir
+                await Promise.all(batchPromises);
 
-                allPromises.push(routePromise);
+                // Pequeno delay entre lotes para não sobrecarregar as APIs
+                if (batchEnd < totalRoutes) {
+                    await delay(500);
+                }
             }
 
-            // Aguardar TODAS as rotas serem processadas
-            const results = await Promise.all(allPromises);
+            // Resultados finais
+            const results = [];
 
             // Mostrar estatísticas da rota
             const distanceKm = (totalDistance / 1000).toFixed(1);
