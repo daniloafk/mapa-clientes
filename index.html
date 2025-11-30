@@ -7474,21 +7474,9 @@ Retorne a ordem otimizada:`;
 
             console.log(`🎨 Renderizando ${totalStops} paradas - Modo: ${isMobile ? 'MOBILE' : 'DESKTOP'} - Ícones: ${usePrettyIcons ? 'BONITOS ✨' : 'SIMPLES ⚡'}`);
 
-            // Return original coordinates without offset to prevent floating during rotation/zoom
-            function getAdjustedCoordinates(lat, lng, index) {
-                return [lat, lng];
-            }
-
             optimizedOrder.forEach((originalIndex, routeIndex) => {
                 const stop = state.routeData[originalIndex];
                 if (!stop) return;
-
-                // Obter coordenadas ajustadas para evitar sobreposição
-                const [adjustedLat, adjustedLng] = getAdjustedCoordinates(
-                    stop.latitude,
-                    stop.longitude,
-                    routeIndex
-                );
 
                 const stopNumber = routeIndex + 1;
                 const isDelivered = state.deliveredStops.has(routeIndex);
@@ -7497,7 +7485,7 @@ Retorne a ordem otimizada:`;
 
                 // Mobile com MUITAS paradas: usar CircleMarker simples (máxima performance)
                 if (isMobile && !usePrettyIcons) {
-                    const circleMarker = L.circleMarker([adjustedLat, adjustedLng], {
+                    const circleMarker = L.circleMarker([stop.latitude, stop.longitude], {
                         radius: 12,
                         fillColor: color,
                         color: '#fff',
@@ -7613,8 +7601,8 @@ Retorne a ordem otimizada:`;
                     iconAnchor: packageCount > 1 ? [20, 55] : [20, 40]
                 });
 
-                // Adicionar marcador com coordenadas ajustadas
-                const marker = L.marker([adjustedLat, adjustedLng], {
+                // Adicionar marcador com coordenadas originais
+                const marker = L.marker([stop.latitude, stop.longitude], {
                     icon: numberedIcon,
                     title: `Parada ${stopNumber}: ${stop.address}`
                 }).addTo(state.map);
