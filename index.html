@@ -6843,10 +6843,15 @@ Retorne a ordem otimizada:`;
         async function fetchFromGoogleMaps(startLat, startLng, endLat, endLng, timeout = 10000) {
             // Verificar se tem API Key configurada
             if (!state.googleMapsApiKey) {
+                console.log('Google Maps: Sem API Key configurada');
                 return null;
             }
 
-            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&mode=driving&language=pt-BR&key=${state.googleMapsApiKey}`;
+            // Usar proxy CORS para evitar bloqueio
+            const apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&mode=driving&language=pt-BR&key=${state.googleMapsApiKey}`;
+            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+
+            console.log('🗺️ Google Maps: Testando rota...');
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -6861,6 +6866,7 @@ Retorne a ordem otimizada:`;
                 }
 
                 const data = await response.json();
+                console.log('Google Maps resposta:', data);
 
                 if (data.status === 'OK' && data.routes && data.routes.length > 0) {
                     const route = data.routes[0];
@@ -6868,6 +6874,7 @@ Retorne a ordem otimizada:`;
                     const coords = decodePolyline(route.overview_polyline.points);
 
                     if (coords && coords.length > 1) {
+                        console.log(`✅ Google Maps: Rota OK (${(leg.distance.value/1000).toFixed(1)}km)`);
                         return {
                             coordinates: coords,
                             distance: leg.distance.value, // metros
@@ -6875,12 +6882,14 @@ Retorne a ordem otimizada:`;
                             source: 'Google Maps'
                         };
                     }
+                } else if (data.status) {
+                    console.warn(`Google Maps status: ${data.status}`, data.error_message || '');
                 }
                 return null;
             } catch (error) {
                 clearTimeout(timeoutId);
                 if (error.name !== 'AbortError') {
-                    console.warn('Google Maps erro:', error.message);
+                    console.error('Google Maps erro:', error.message);
                 }
                 return null;
             }
