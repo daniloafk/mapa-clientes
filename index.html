@@ -2061,7 +2061,53 @@
     <div class="user-header-info" id="userHeaderInfo" style="display: none;">
         <span id="currentUsername">Usuário</span>
         <button class="admin-btn" id="openAdminBtn" style="display: none;">👥 Admin</button>
+        <button class="admin-btn" id="openSettingsBtn">⚙️ Config</button>
         <button class="logout-btn" id="logoutBtn">Sair</button>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="admin-panel" id="settingsPanel">
+        <div class="admin-header">
+            <h1>⚙️ Configurações</h1>
+            <button class="close-admin-btn" id="closeSettingsBtn">×</button>
+        </div>
+        <div class="admin-content">
+            <div style="background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">🗺️ Google Maps API</h3>
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
+                    Para rotas mais precisas, configure sua API Key do Google Maps (gratuita até 28.500 rotas/mês).
+                    <a href="https://console.cloud.google.com/" target="_blank" style="color: #2563eb;">Obter API Key gratuita →</a>
+                </p>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">
+                        API Key (opcional):
+                    </label>
+                    <input
+                        type="text"
+                        id="googleMapsApiKey"
+                        placeholder="Cole sua API Key aqui (opcional)"
+                        style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; font-family: monospace;"
+                    >
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button id="saveApiKeyBtn" style="flex: 1; background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        💾 Salvar
+                    </button>
+                    <button id="clearApiKeyBtn" style="background: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        🗑️ Limpar
+                    </button>
+                </div>
+                <div id="apiKeyStatus" style="margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; display: none;"></div>
+            </div>
+
+            <div style="background: #fff; border-radius: 8px; padding: 20px;">
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">ℹ️ Informações</h3>
+                <div style="font-size: 13px; color: #6b7280; line-height: 1.6;">
+                    <p style="margin: 0 0 8px 0;"><strong>Com API Key:</strong> Usa Google Maps (mais preciso, dados de trânsito em tempo real)</p>
+                    <p style="margin: 0;"><strong>Sem API Key:</strong> Usa OSRM e GraphHopper (gratuito, sem limite)</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="loading" id="loading">
@@ -2511,7 +2557,10 @@
             deliveredStops: new Set(), // Set de índices das paradas entregues
             optimizedOrder: null, // Ordem otimizada atual das paradas
             mapLayers: null, // Layers do mapa (streets, satellite, hybrid)
-            currentMapLayer: 'streets' // Layer atual do mapa
+            currentMapLayer: 'streets', // Layer atual do mapa
+            googleMapsApiKey: null, // API Key do Google Maps (opcional)
+            routeData: [], // Dados das paradas para roteamento
+            routePolylines: [] // Polylines desenhadas no mapa
         };
 
         // ========== SISTEMA DE AUTENTICAÇÃO ==========
@@ -5531,6 +5580,65 @@
             document.getElementById('adminPanel').classList.remove('active');
         });
 
+        // Open Settings Panel
+        document.getElementById('openSettingsBtn').addEventListener('click', () => {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.add('active');
+
+            // Carregar API Key salva no state (se houver)
+            if (state.googleMapsApiKey) {
+                document.getElementById('googleMapsApiKey').value = state.googleMapsApiKey;
+            }
+        });
+
+        // Close Settings Panel
+        document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsPanel').classList.remove('active');
+        });
+
+        // Save API Key
+        document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
+            const apiKey = document.getElementById('googleMapsApiKey').value.trim();
+            const statusEl = document.getElementById('apiKeyStatus');
+
+            if (apiKey) {
+                state.googleMapsApiKey = apiKey;
+                statusEl.textContent = '✅ API Key salva com sucesso! As rotas agora usarão Google Maps.';
+                statusEl.style.background = '#d1fae5';
+                statusEl.style.color = '#065f46';
+                statusEl.style.display = 'block';
+
+                showToast('API Key do Google Maps configurada com sucesso!', 'success');
+            } else {
+                statusEl.textContent = '⚠️ Por favor, insira uma API Key válida.';
+                statusEl.style.background = '#fee2e2';
+                statusEl.style.color = '#991b1b';
+                statusEl.style.display = 'block';
+            }
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        });
+
+        // Clear API Key
+        document.getElementById('clearApiKeyBtn').addEventListener('click', () => {
+            state.googleMapsApiKey = null;
+            document.getElementById('googleMapsApiKey').value = '';
+
+            const statusEl = document.getElementById('apiKeyStatus');
+            statusEl.textContent = '🗑️ API Key removida. Usando APIs gratuitas (OSRM e GraphHopper).';
+            statusEl.style.background = '#dbeafe';
+            statusEl.style.color = '#1e40af';
+            statusEl.style.display = 'block';
+
+            showToast('API Key removida. Usando APIs gratuitas.', 'success');
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        });
+
         // Add User Modal
         const addUserModal = document.getElementById('addUserModal');
         const addUserBtn = document.getElementById('addUserBtn');
@@ -6527,6 +6635,53 @@ Retorne a ordem otimizada:`;
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        // API Google Maps Directions (MELHOR - Requer API Key)
+        async function fetchFromGoogleMaps(startLat, startLng, endLat, endLng, timeout = 10000) {
+            // Verificar se tem API Key configurada
+            if (!state.googleMapsApiKey) {
+                return null;
+            }
+
+            const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${startLat},${startLng}&destination=${endLat},${endLng}&mode=driving&language=pt-BR&key=${state.googleMapsApiKey}`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    console.warn(`Google Maps HTTP ${response.status}`);
+                    return null;
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'OK' && data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const leg = route.legs[0];
+                    const coords = decodePolyline(route.overview_polyline.points);
+
+                    if (coords && coords.length > 1) {
+                        return {
+                            coordinates: coords,
+                            distance: leg.distance.value, // metros
+                            duration: leg.duration.value, // segundos
+                            source: 'Google Maps'
+                        };
+                    }
+                }
+                return null;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name !== 'AbortError') {
+                    console.warn('Google Maps erro:', error.message);
+                }
+                return null;
+            }
+        }
+
         // API 1: OSRM (Prioridade 1 - Mais rápido e confiável)
         async function fetchFromOSRM(startLat, startLng, endLat, endLng, timeout = 8000) {
             const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
@@ -6609,7 +6764,7 @@ Retorne a ordem otimizada:`;
             }
         }
 
-        // Buscar rota com retry - Sistema simplificado e robusto (SOMENTE APIs TESTADAS)
+        // Buscar rota com retry - Sistema robusto com Google Maps opcional
         async function fetchRouteFromMultipleAPIs(startLat, startLng, endLat, endLng, maxRetries = 3) {
             // Verificar cache primeiro
             const cacheKey = getRouteCacheKey(startLat, startLng, endLat, endLng);
@@ -6617,13 +6772,21 @@ Retorne a ordem otimizada:`;
                 return routeCache.get(cacheKey);
             }
 
-            // Usar apenas as 2 APIs mais confiáveis e testadas
-            const apis = [
+            // Montar lista de APIs baseado na disponibilidade da API Key
+            const apis = [];
+
+            // Se tiver API Key do Google Maps, usar como prioridade
+            if (state.googleMapsApiKey) {
+                apis.push({ name: 'Google Maps', func: fetchFromGoogleMaps });
+            }
+
+            // Adicionar APIs gratuitas como fallback
+            apis.push(
                 { name: 'OSRM', func: fetchFromOSRM },
                 { name: 'GraphHopper', func: fetchFromGraphHopper }
-            ];
+            );
 
-            // Tentar cada API até 3 vezes
+            // Tentar cada API até maxRetries vezes
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 for (const api of apis) {
                     try {
