@@ -2073,19 +2073,19 @@
         </div>
         <div class="admin-content">
             <div style="background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">🗺️ Google Maps API (Global)</h3>
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">🗺️ Google Maps Platform API Key</h3>
                 <p style="margin: 0 0 16px 0; font-size: 13px; color: #6b7280; line-height: 1.5;">
-                    ⚠️ <strong>Configuração para TODAS as contas!</strong> Configure uma vez e todos os usuários terão rotas mais precisas com Google Maps (gratuita até 28.500 rotas/mês).
-                    <a href="https://console.cloud.google.com/" target="_blank" style="color: #2563eb;">Obter API Key gratuita →</a>
+                    ⚠️ <strong>OBRIGATÓRIO para roteirização!</strong> Configure uma vez e todos os usuários poderão usar. O sistema usa APENAS Google Maps para garantir rotas precisas com dados de trânsito em tempo real (gratuita até 28.500 rotas/mês).
+                    <br><a href="https://console.cloud.google.com/" target="_blank" style="color: #2563eb; font-weight: 600;">Obter API Key gratuita →</a>
                 </p>
                 <div style="margin-bottom: 12px;">
                     <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #374151;">
-                        API Key (opcional):
+                        API Key (Maps Platform):
                     </label>
                     <input
                         type="text"
                         id="googleMapsApiKey"
-                        placeholder="Cole sua API Key aqui (opcional)"
+                        placeholder="Cole sua Google Maps Platform API Key aqui"
                         style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; font-family: monospace;"
                     >
                 </div>
@@ -2106,8 +2106,10 @@
             <div style="background: #fff; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #374151;">ℹ️ Informações</h3>
                 <div style="font-size: 13px; color: #6b7280; line-height: 1.6;">
-                    <p style="margin: 0 0 8px 0;"><strong>Com API Key:</strong> Usa Google Maps (mais preciso, dados de trânsito em tempo real)</p>
-                    <p style="margin: 0;"><strong>Sem API Key:</strong> Usa OSRM e GraphHopper (gratuito, sem limite)</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Sistema:</strong> Usa exclusivamente Google Maps Platform API</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Vantagens:</strong> Rotas mais precisas, dados de trânsito em tempo real, melhor navegação</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Custo:</strong> GRATUITO até 28.500 rotas/mês (200 USD/mês em créditos)</p>
+                    <p style="margin: 0;"><strong>Requisitos:</strong> Directions API ativada no Google Cloud Console</p>
                 </div>
             </div>
         </div>
@@ -6895,89 +6897,7 @@ Retorne a ordem otimizada:`;
             }
         }
 
-        // API 1: OSRM (Prioridade 1 - Mais rápido e confiável)
-        async function fetchFromOSRM(startLat, startLng, endLat, endLng, timeout = 8000) {
-            const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    console.warn(`OSRM HTTP ${response.status}`);
-                    return null;
-                }
-
-                const data = await response.json();
-
-                if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-                    const route = data.routes[0];
-                    const coords = decodePolyline(route.geometry);
-
-                    if (coords && coords.length > 1) {
-                        return {
-                            coordinates: coords,
-                            distance: route.distance,
-                            duration: route.duration,
-                            source: 'OSRM'
-                        };
-                    }
-                }
-                return null;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                if (error.name !== 'AbortError') {
-                    console.warn('OSRM erro:', error.message);
-                }
-                return null;
-            }
-        }
-
-        // API 2: GraphHopper (Prioridade 2 - Backup do OSRM)
-        async function fetchFromGraphHopper(startLat, startLng, endLat, endLng, timeout = 8000) {
-            const url = `https://graphhopper.com/api/1/route?point=${startLat},${startLng}&point=${endLat},${endLng}&vehicle=car&locale=pt-BR&instructions=false&calc_points=true&points_encoded=true`;
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    console.warn(`GraphHopper HTTP ${response.status}`);
-                    return null;
-                }
-
-                const data = await response.json();
-
-                if (data.paths && data.paths.length > 0) {
-                    const path = data.paths[0];
-                    const coords = decodePolyline(path.points);
-
-                    if (coords && coords.length > 1) {
-                        return {
-                            coordinates: coords,
-                            distance: path.distance,
-                            duration: path.time / 1000, // ms to seconds
-                            source: 'GraphHopper'
-                        };
-                    }
-                }
-                return null;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                if (error.name !== 'AbortError') {
-                    console.warn('GraphHopper erro:', error.message);
-                }
-                return null;
-            }
-        }
-
-        // Buscar rota com retry - Sistema robusto com Google Maps opcional
+        // Buscar rota usando APENAS Google Maps Platform API
         async function fetchRouteFromMultipleAPIs(startLat, startLng, endLat, endLng, maxRetries = 3) {
             // Verificar cache primeiro
             const cacheKey = getRouteCacheKey(startLat, startLng, endLat, endLng);
@@ -6985,47 +6905,39 @@ Retorne a ordem otimizada:`;
                 return routeCache.get(cacheKey);
             }
 
-            // Montar lista de APIs baseado na disponibilidade da API Key
-            const apis = [];
-
-            // Se tiver API Key do Google Maps, usar como prioridade
-            if (state.googleMapsApiKey) {
-                apis.push({ name: 'Google Maps', func: fetchFromGoogleMaps });
+            // Verificar se tem API Key configurada
+            if (!state.googleMapsApiKey) {
+                console.error('❌ Google Maps API Key não configurada! Configure em "⚙️ Config"');
+                return null;
             }
 
-            // Adicionar APIs gratuitas como fallback
-            apis.push(
-                { name: 'OSRM', func: fetchFromOSRM },
-                { name: 'GraphHopper', func: fetchFromGraphHopper }
-            );
-
-            // Tentar cada API até maxRetries vezes
+            // Tentar até maxRetries vezes
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                for (const api of apis) {
-                    try {
-                        const result = await api.func(startLat, startLng, endLat, endLng);
+                try {
+                    const result = await fetchFromGoogleMaps(startLat, startLng, endLat, endLng);
 
-                        if (result && result.coordinates && result.coordinates.length > 1) {
-                            console.log(`✅ ${api.name} OK (tentativa ${attempt})`);
-                            // Salvar no cache
-                            routeCache.set(cacheKey, result);
-                            return result;
-                        }
-                    } catch (error) {
-                        console.warn(`⚠️ ${api.name} falhou (tentativa ${attempt}):`, error.message);
+                    if (result && result.coordinates && result.coordinates.length > 1) {
+                        console.log(`✅ Google Maps OK (tentativa ${attempt})`);
+                        // Salvar no cache
+                        routeCache.set(cacheKey, result);
+                        return result;
+                    } else {
+                        console.warn(`⚠️ Google Maps retornou vazio (tentativa ${attempt})`);
                     }
+                } catch (error) {
+                    console.warn(`⚠️ Google Maps erro (tentativa ${attempt}):`, error.message);
                 }
 
                 // Aguardar antes de próxima tentativa (apenas se não for a última)
                 if (attempt < maxRetries) {
-                    const delayMs = 1000 * attempt; // 1s, 2s, 3s
+                    const delayMs = 2000 * attempt; // 2s, 4s, 6s
                     console.log(`⏳ Aguardando ${delayMs}ms antes de retry...`);
                     await delay(delayMs);
                 }
             }
 
             // Se chegou aqui, todas as tentativas falharam
-            console.error(`❌ Não foi possível obter rota após ${maxRetries} tentativas`);
+            console.error(`❌ Google Maps: Não foi possível obter rota após ${maxRetries} tentativas`);
             return null;
         }
 
