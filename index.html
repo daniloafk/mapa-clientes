@@ -6154,8 +6154,161 @@ Retorne a ordem otimizada:`;
             return route;
         }
 
+        // ========== FUNÇÕES DE ROTEAMENTO COM GOOGLE MAPS/OSRM ==========
+
+        // Decodificar polyline codificada (formato usado por Google Maps e OSRM)
+        function decodePolyline(encoded) {
+            if (!encoded) return [];
+
+            const poly = [];
+            let index = 0, len = encoded.length;
+            let lat = 0, lng = 0;
+
+            while (index < len) {
+                let b, shift = 0, result = 0;
+                do {
+                    b = encoded.charCodeAt(index++) - 63;
+                    result |= (b & 0x1f) << shift;
+                    shift += 5;
+                } while (b >= 0x20);
+                const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                lat += dlat;
+
+                shift = 0;
+                result = 0;
+                do {
+                    b = encoded.charCodeAt(index++) - 63;
+                    result |= (b & 0x1f) << shift;
+                    shift += 5;
+                } while (b >= 0x20);
+                const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                lng += dlng;
+
+                poly.push([lat / 1e5, lng / 1e5]);
+            }
+            return poly;
+        }
+
+        // Buscar rota real entre dois pontos usando OSRM (Open Source Routing Machine)
+        async function fetchRouteFromOSRM(startLat, startLng, endLat, endLng) {
+            try {
+                // OSRM usa formato: longitude,latitude (invertido!)
+                const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=polyline`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const geometry = route.geometry;
+
+                    // Decodificar polyline
+                    const coordinates = decodePolyline(geometry);
+
+                    return {
+                        coordinates: coordinates,
+                        distance: route.distance, // em metros
+                        duration: route.duration  // em segundos
+                    };
+                }
+
+                return null;
+            } catch (error) {
+                console.error('Erro ao buscar rota do OSRM:', error);
+                return null;
+            }
+        }
+
+        // Desenhar rotas reais entre todas as paradas
+        async function drawRealRoutes(optimizedOrder, colors, isMobile) {
+            console.log('🗺️ Buscando rotas reais do Google Maps/OSRM...');
+
+            const routeStatus = document.getElementById('routeStatus');
+            if (routeStatus) {
+                routeStatus.textContent = '🗺️ Calculando rotas reais nas ruas...';
+            }
+
+            let totalDistance = 0;
+            let totalDuration = 0;
+            let routesDrawn = 0;
+
+            // Processar rotas em paralelo (mas com limite para não sobrecarregar)
+            const BATCH_SIZE = 3; // Processar 3 rotas por vez
+
+            for (let i = 0; i < optimizedOrder.length - 1; i += BATCH_SIZE) {
+                const batch = [];
+
+                for (let j = i; j < Math.min(i + BATCH_SIZE, optimizedOrder.length - 1); j++) {
+                    const currentStop = state.routeData[optimizedOrder[j]];
+                    const nextStop = state.routeData[optimizedOrder[j + 1]];
+                    const color = colors[j % colors.length];
+
+                    batch.push(
+                        fetchRouteFromOSRM(
+                            currentStop.latitude,
+                            currentStop.longitude,
+                            nextStop.latitude,
+                            nextStop.longitude
+                        ).then(routeData => {
+                            if (routeData && routeData.coordinates.length > 0) {
+                                // Desenhar polyline com a rota real
+                                const polyline = L.polyline(routeData.coordinates, {
+                                    color: color,
+                                    weight: isMobile ? 4 : 5,
+                                    opacity: 0.8,
+                                    smoothFactor: 1
+                                }).addTo(state.map);
+
+                                state.routePolylines.push(polyline);
+
+                                totalDistance += routeData.distance;
+                                totalDuration += routeData.duration;
+                                routesDrawn++;
+
+                                return routeData;
+                            } else {
+                                // Fallback: linha reta se não conseguir buscar rota
+                                console.warn(`⚠️ Usando linha reta para parada ${j + 1}`);
+                                const polyline = L.polyline([
+                                    [currentStop.latitude, currentStop.longitude],
+                                    [nextStop.latitude, nextStop.longitude]
+                                ], {
+                                    color: color,
+                                    weight: 3,
+                                    opacity: 0.7,
+                                    dashArray: '10, 5'
+                                }).addTo(state.map);
+
+                                state.routePolylines.push(polyline);
+                                return null;
+                            }
+                        })
+                    );
+                }
+
+                // Aguardar o batch completar
+                await Promise.all(batch);
+
+                // Atualizar progresso
+                const progress = Math.round(((i + BATCH_SIZE) / (optimizedOrder.length - 1)) * 100);
+                if (routeStatus) {
+                    routeStatus.textContent = `🗺️ Calculando rotas reais... ${Math.min(progress, 100)}%`;
+                }
+            }
+
+            // Mostrar estatísticas da rota
+            const distanceKm = (totalDistance / 1000).toFixed(1);
+            const durationMin = Math.round(totalDuration / 60);
+            console.log(`✅ ${routesDrawn} rotas reais desenhadas! Distância total: ${distanceKm}km, Tempo estimado: ${durationMin}min`);
+
+            if (routeStatus) {
+                routeStatus.textContent = `✓ Rota otimizada! ${optimizedOrder.length} paradas • ${distanceKm}km • ~${durationMin}min`;
+                routeStatus.className = 'upload-status success';
+            }
+        }
+
         // Process Optimized Route from AI
-        function processOptimizedRoute(optimizedOrder) {
+        async function processOptimizedRoute(optimizedOrder) {
             // Ativar modo de visualização de rota otimizada
             state.viewingOptimizedRoute = true;
 
@@ -6438,23 +6591,8 @@ Retorne a ordem otimizada:`;
                 // Armazenar para limpar depois
                 state.routePolylines.push(marker);
 
-                // Desenhar linha para a próxima parada (sempre desenhar para mostrar a rota otimizada)
-                if (routeIndex < optimizedOrder.length - 1) {
-                    const nextStop = state.routeData[optimizedOrder[routeIndex + 1]];
-                    if (nextStop) {
-                        const polyline = L.polyline([
-                            [stop.latitude, stop.longitude],
-                            [nextStop.latitude, nextStop.longitude]
-                        ], {
-                            color: color,
-                            weight: 3,
-                            opacity: 0.7,
-                            dashArray: '10, 5'
-                        }).addTo(state.map);
-
-                        state.routePolylines.push(polyline);
-                    }
-                }
+                // NOTA: As rotas reais serão desenhadas depois com drawRealRoutes()
+                // Não desenhar linhas retas aqui
             });
 
             // Ajustar zoom e centralizar mapa para mostrar toda a rota
@@ -6480,6 +6618,9 @@ Retorne a ordem otimizada:`;
 
             // Atualizar contador de entregas
             updateDeliveryCounter();
+
+            // Desenhar rotas reais usando dados do Google Maps/OSRM
+            await drawRealRoutes(optimizedOrder, colors, isMobile);
 
             // Fechar aba lateral em mobile para melhor visualização
             const sidebar = document.querySelector('.sidebar');
