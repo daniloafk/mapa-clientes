@@ -4020,35 +4020,13 @@
             const totalStops = optimizedOrder.length;
             const usePrettyIcons = !isMobile || totalStops <= 10;
 
-            // Detectar e deslocar marcadores sobrepostos
-            const offsetMap = new Map();
-            const OVERLAP_THRESHOLD = 0.00005;
-            const OFFSET_AMOUNT = 0.0001;
-
+            // Não usar offset de coordenadas quando rotação está habilitada
+            // (offset geográfico causa bug de flutuação durante rotação/zoom)
             function getAdjustedCoordinates(lat, lng, index) {
-                let adjustedLat = lat;
-                let adjustedLng = lng;
-
-                for (const [key, offset] of offsetMap.entries()) {
-                    const [existingLat, existingLng] = key.split('_').map(Number);
-                    const latDiff = Math.abs(existingLat - adjustedLat);
-                    const lngDiff = Math.abs(existingLng - adjustedLng);
-
-                    if (latDiff < OVERLAP_THRESHOLD && lngDiff < OVERLAP_THRESHOLD) {
-                        const angle = (offset.count * 60) * (Math.PI / 180);
-                        adjustedLat = existingLat + (OFFSET_AMOUNT * Math.cos(angle));
-                        adjustedLng = existingLng + (OFFSET_AMOUNT * Math.sin(angle));
-                        offset.count++;
-                        break;
-                    }
-                }
-
-                const key = `${adjustedLat}_${adjustedLng}`;
-                if (!offsetMap.has(key)) {
-                    offsetMap.set(key, { count: 1 });
-                }
-
-                return [adjustedLat, adjustedLng];
+                // Retornar coordenadas originais sem ajuste
+                // Os marcadores vão sobrepor se estiverem no mesmo local,
+                // mas isso é melhor do que ficarem flutuando durante rotação
+                return [lat, lng];
             }
 
             // Reconstruir marcadores com status atualizado
@@ -7496,40 +7474,9 @@ Retorne a ordem otimizada:`;
 
             console.log(`🎨 Renderizando ${totalStops} paradas - Modo: ${isMobile ? 'MOBILE' : 'DESKTOP'} - Ícones: ${usePrettyIcons ? 'BONITOS ✨' : 'SIMPLES ⚡'}`);
 
-            // Detectar e deslocar marcadores sobrepostos
-            const offsetMap = new Map(); // Mapa para rastrear deslocamentos
-            const OVERLAP_THRESHOLD = 0.00005; // ~5 metros (ajustável)
-            const OFFSET_AMOUNT = 0.0001; // ~11 metros de deslocamento
-
+            // Return original coordinates without offset to prevent floating during rotation/zoom
             function getAdjustedCoordinates(lat, lng, index) {
-                let adjustedLat = lat;
-                let adjustedLng = lng;
-
-                // Verificar se há marcadores muito próximos já adicionados
-                for (const [key, offset] of offsetMap.entries()) {
-                    const [existingLat, existingLng] = key.split('_').map(Number);
-                    const latDiff = Math.abs(existingLat - adjustedLat);
-                    const lngDiff = Math.abs(existingLng - adjustedLng);
-
-                    // Se estiver muito próximo, aplicar offset
-                    if (latDiff < OVERLAP_THRESHOLD && lngDiff < OVERLAP_THRESHOLD) {
-                        // Aplicar deslocamento em círculo baseado no número de offsets já aplicados
-                        const angle = (offset.count * 60) * (Math.PI / 180); // 60 graus entre cada marcador
-                        adjustedLat = existingLat + (OFFSET_AMOUNT * Math.cos(angle));
-                        adjustedLng = existingLng + (OFFSET_AMOUNT * Math.sin(angle));
-                        offset.count++;
-                        console.log(`📍 Marcador ${index + 1} deslocado para evitar sobreposição`);
-                        break;
-                    }
-                }
-
-                // Registrar a posição ajustada
-                const key = `${adjustedLat}_${adjustedLng}`;
-                if (!offsetMap.has(key)) {
-                    offsetMap.set(key, { count: 1 });
-                }
-
-                return [adjustedLat, adjustedLng];
+                return [lat, lng];
             }
 
             optimizedOrder.forEach((originalIndex, routeIndex) => {
