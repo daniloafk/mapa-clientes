@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" >
 
     <!-- Leaflet Rotate CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.css" >
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.3.3/dist/leaflet-rotate.css" >
 
     <style>
         :root {
@@ -2486,7 +2486,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- Leaflet Rotate JS (suporte para rotação 360°) -->
-    <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+    <script src="https://unpkg.com/leaflet-rotate@0.3.3/dist/leaflet-rotate.js"></script>
 
     <!-- Leaflet Routing Machine JS -->
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
@@ -3241,10 +3241,11 @@
                 tap: true,
                 tapTolerance: 15,
                 bounceAtZoomLimits: false,
-                // Manter animações suaves para melhor experiência
-                zoomAnimation: true,
-                fadeAnimation: true,
-                markerZoomAnimation: false,  // Desabilitado para evitar bug com rotação
+                // Desabilitar TODAS as animações para evitar bug de flutuação
+                zoomAnimation: false,
+                fadeAnimation: false,
+                markerZoomAnimation: false,
+                inertia: false,
                 // Configurações de zoom
                 zoomSnap: 1,
                 zoomDelta: 1,
@@ -3253,7 +3254,9 @@
                 rotate: true,
                 bearing: 0,  // Ângulo inicial (0 = Norte para cima)
                 touchRotate: true,  // Permitir rotação por toque (mobile)
-                rotateControl: false  // Não mostrar controle de rotação padrão (vamos criar customizado)
+                rotateControl: false,  // Não mostrar controle de rotação padrão (vamos criar customizado)
+                shiftKeyRotate: false,
+                trackResize: true
             }).setView([lat, lng], isMobile ? 18 : 17);
 
             // Criar layers de Google Maps com tiles Retina (textos e ícones em tamanho normal do Google Maps)
