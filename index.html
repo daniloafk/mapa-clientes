@@ -4421,114 +4421,165 @@
 
             let lastLat = null;
             let lastLng = null;
+            let gpsErrorCount = 0; // Contador de erros consecutivos
+            const MAX_GPS_ERRORS = 3; // Máximo de erros antes de tentar reconectar
 
-            // Rastrear posição continuamente
-            state.navigationWatchId = navigator.geolocation.watchPosition(
-                (position) => {
-                    const newLat = position.coords.latitude;
-                    const newLng = position.coords.longitude;
-                    const heading = position.coords.heading; // Direção do movimento (0-360 graus)
-                    const speed = position.coords.speed; // Velocidade em m/s
-
-                    console.log('📍 Posição atualizada:', {
-                        lat: newLat,
-                        lng: newLng,
-                        heading: heading,
-                        speed: speed
-                    });
-
-                    // Atualizar posição atual
-                    state.currentLocation = { lat: newLat, lng: newLng };
-
-                    // Atualizar marcador de posição no mapa
-                    if (state.currentLocationMarker) {
-                        state.currentLocationMarker.setLatLng([newLat, newLng]);
-                    }
-
-                    // Calcular direção baseado na posição anterior se heading não estiver disponível
-                    let bearing = heading;
-                    if (bearing === null && lastLat !== null && lastLng !== null) {
-                        // Calcular bearing entre dois pontos
-                        const dLon = (newLng - lastLng) * Math.PI / 180;
-                        const lat1 = lastLat * Math.PI / 180;
-                        const lat2 = newLat * Math.PI / 180;
-                        const y = Math.sin(dLon) * Math.cos(lat2);
-                        const x = Math.cos(lat1) * Math.sin(lat2) -
-                                Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-                        bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-                    }
-
-                    // ROTAÇÃO DO MAPA baseado na direção do movimento
-                    // Nota: setBearing() requer plugin Leaflet.Rotate - comentado por enquanto
-                    if (bearing !== null && !isNaN(bearing)) {
-                        // state.map.setBearing(bearing);
-                        console.log('🧭 Direção calculada:', bearing.toFixed(1) + '°');
-                    }
-
-                    // Calcular distância até o destino
-                    const distanceToDestination = calculateDistance(
-                        newLat, newLng,
-                        state.navigationDestination.lat, state.navigationDestination.lng
-                    );
-
-                    // ZOOM DINÂMICO baseado na distância (APENAS durante navegação ativa E não visualizando rota otimizada)
-                    if (state.navigationActive && !state.viewingOptimizedRoute) {
-                        let targetZoom = 16; // Zoom padrão
-                        if (distanceToDestination < 0.1) { // Menos de 100m
-                            targetZoom = 19; // Zoom alto (próximo)
-                        } else if (distanceToDestination < 0.5) { // Menos de 500m
-                            targetZoom = 18;
-                        } else if (distanceToDestination < 1) { // Menos de 1km
-                            targetZoom = 17;
-                        } else if (distanceToDestination < 5) { // Menos de 5km
-                            targetZoom = 16;
-                        } else {
-                            targetZoom = 14; // Zoom médio (longe)
-                        }
-
-                        // Aplicar zoom suave
-                        if (Math.abs(state.map.getZoom() - targetZoom) > 0.5) {
-                            state.map.setZoom(targetZoom, {
-                                animate: true
-                            });
-                            console.log(`🔍 Zoom ajustado para ${targetZoom} (distância: ${distanceToDestination.toFixed(2)} km)`);
-                        }
-                    }
-
-                    // Centralizar mapa na posição atual APENAS se navegação estiver ativa E não visualizando rota otimizada
-                    if (state.navigationActive && !state.viewingOptimizedRoute) {
-                        state.map.panTo([newLat, newLng], {
-                            animate: true,
-                            duration: 1
-                        });
-                    }
-
-                    // Atualizar estatísticas de navegação
-                    updateNavigationStats();
-
-                    // Recalcular rota se necessário
-                    if (state.routingControl && state.navigationDestination) {
-                        const waypoints = state.routingControl.getWaypoints();
-                        waypoints[0].latLng = L.latLng(newLat, newLng);
-                        state.routingControl.setWaypoints(waypoints);
-                    }
-
-                    // Armazenar posição atual para próxima iteração
-                    lastLat = newLat;
-                    lastLng = newLng;
-                },
-                (error) => {
-                    console.error('Erro no rastreamento GPS:', error);
-                    showToast('Erro ao rastrear localização', 'warning');
-                },
-                {
-                    enableHighAccuracy: true,
-                    maximumAge: 1000, // Atualização mais frequente para rotação suave
-                    timeout: 10000
+            // Função para iniciar/reiniciar watchPosition
+            const startGPSTracking = () => {
+                // Limpar watch anterior se existir
+                if (state.navigationWatchId) {
+                    navigator.geolocation.clearWatch(state.navigationWatchId);
+                    state.navigationWatchId = null;
                 }
-            );
 
-            console.log('✅ Rastreamento GPS iniciado com rotação e zoom automático');
+                console.log('🛰️ Iniciando rastreamento GPS...');
+
+                // Rastrear posição continuamente
+                state.navigationWatchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        // ✅ SUCESSO - resetar contador de erros
+                        gpsErrorCount = 0;
+
+                        const newLat = position.coords.latitude;
+                        const newLng = position.coords.longitude;
+                        const heading = position.coords.heading; // Direção do movimento (0-360 graus)
+                        const speed = position.coords.speed; // Velocidade em m/s
+
+                        console.log('📍 Posição atualizada:', {
+                            lat: newLat,
+                            lng: newLng,
+                            heading: heading,
+                            speed: speed
+                        });
+
+                        // Atualizar posição atual
+                        state.currentLocation = { lat: newLat, lng: newLng };
+
+                        // Atualizar marcador de posição no mapa
+                        if (state.currentLocationMarker) {
+                            state.currentLocationMarker.setLatLng([newLat, newLng]);
+                        }
+
+                        // Calcular direção baseado na posição anterior se heading não estiver disponível
+                        let bearing = heading;
+                        if (bearing === null && lastLat !== null && lastLng !== null) {
+                            // Calcular bearing entre dois pontos
+                            const dLon = (newLng - lastLng) * Math.PI / 180;
+                            const lat1 = lastLat * Math.PI / 180;
+                            const lat2 = newLat * Math.PI / 180;
+                            const y = Math.sin(dLon) * Math.cos(lat2);
+                            const x = Math.cos(lat1) * Math.sin(lat2) -
+                                    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                            bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                        }
+
+                        // ROTAÇÃO DO MAPA baseado na direção do movimento
+                        // Nota: setBearing() requer plugin Leaflet.Rotate - comentado por enquanto
+                        if (bearing !== null && !isNaN(bearing)) {
+                            // state.map.setBearing(bearing);
+                            console.log('🧭 Direção calculada:', bearing.toFixed(1) + '°');
+                        }
+
+                        // Calcular distância até o destino
+                        const distanceToDestination = calculateDistance(
+                            newLat, newLng,
+                            state.navigationDestination.lat, state.navigationDestination.lng
+                        );
+
+                        // ZOOM DINÂMICO baseado na distância (APENAS durante navegação ativa E não visualizando rota otimizada)
+                        if (state.navigationActive && !state.viewingOptimizedRoute) {
+                            let targetZoom = 16; // Zoom padrão
+                            if (distanceToDestination < 0.1) { // Menos de 100m
+                                targetZoom = 19; // Zoom alto (próximo)
+                            } else if (distanceToDestination < 0.5) { // Menos de 500m
+                                targetZoom = 18;
+                            } else if (distanceToDestination < 1) { // Menos de 1km
+                                targetZoom = 17;
+                            } else if (distanceToDestination < 5) { // Menos de 5km
+                                targetZoom = 16;
+                            } else {
+                                targetZoom = 14; // Zoom médio (longe)
+                            }
+
+                            // Aplicar zoom suave
+                            if (Math.abs(state.map.getZoom() - targetZoom) > 0.5) {
+                                state.map.setZoom(targetZoom, {
+                                    animate: true
+                                });
+                                console.log(`🔍 Zoom ajustado para ${targetZoom} (distância: ${distanceToDestination.toFixed(2)} km)`);
+                            }
+                        }
+
+                        // Centralizar mapa na posição atual APENAS se navegação estiver ativa E não visualizando rota otimizada
+                        if (state.navigationActive && !state.viewingOptimizedRoute) {
+                            state.map.panTo([newLat, newLng], {
+                                animate: true,
+                                duration: 1
+                            });
+                        }
+
+                        // Atualizar estatísticas de navegação
+                        updateNavigationStats();
+
+                        // Recalcular rota se necessário
+                        if (state.routingControl && state.navigationDestination) {
+                            const waypoints = state.routingControl.getWaypoints();
+                            waypoints[0].latLng = L.latLng(newLat, newLng);
+                            state.routingControl.setWaypoints(waypoints);
+                        }
+
+                        // Armazenar posição atual para próxima iteração
+                        lastLat = newLat;
+                        lastLng = newLng;
+                    },
+                    (error) => {
+                        gpsErrorCount++;
+                        console.error(`❌ Erro no rastreamento GPS (${gpsErrorCount}/${MAX_GPS_ERRORS}):`, error.code, error.message);
+
+                        // Identificar tipo de erro
+                        let errorMsg = 'Erro ao rastrear localização';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg = 'Permissão de localização negada';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg = 'Sinal GPS fraco ou indisponível';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg = 'Tempo esgotado ao obter localização';
+                                break;
+                        }
+
+                        // Mostrar aviso
+                        showToast(errorMsg, 'warning');
+
+                        // RECONEXÃO AUTOMÁTICA após múltiplos erros
+                        if (gpsErrorCount >= MAX_GPS_ERRORS && state.navigationActive) {
+                            console.warn(`🔄 Tentando reconectar GPS após ${MAX_GPS_ERRORS} erros...`);
+                            gpsErrorCount = 0; // Resetar contador
+
+                            // Aguardar 2 segundos e tentar reconectar
+                            setTimeout(() => {
+                                if (state.navigationActive) { // Verificar se navegação ainda está ativa
+                                    console.log('🔄 Reiniciando rastreamento GPS...');
+                                    showToast('Reconectando GPS...', 'info');
+                                    startGPSTracking();
+                                }
+                            }, 2000);
+                        }
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 2000, // Aceitar posições de até 2 segundos atrás
+                        timeout: 30000 // ⬆️ AUMENTADO: 30 segundos (era 10s)
+                    }
+                );
+
+                console.log('✅ Rastreamento GPS iniciado com rotação e zoom automático');
+            };
+
+            // Iniciar rastreamento
+            startGPSTracking();
         }
 
         // Toggle Navigation Panel
