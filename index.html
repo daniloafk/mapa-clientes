@@ -2531,10 +2531,11 @@
             }
 
             try {
+                // CORREÇÃO: Usar ilike para aceitar maiúsculas/minúsculas no username
                 const { data, error } = await supabase
                     .from('users')
                     .select('*')
-                    .eq('username', username)
+                    .ilike('username', username)
                     .single();
 
                 if (error || !data) {
@@ -2783,10 +2784,23 @@
             }
 
             try {
+                // CORREÇÃO: Verificar se usuário já existe (case-insensitive)
+                const { data: existingUser } = await supabase
+                    .from('users')
+                    .select('username')
+                    .ilike('username', username)
+                    .single();
+
+                if (existingUser) {
+                    showToast('Erro: Já existe um usuário com esse nome. Escolha outro.', 'error');
+                    return false;
+                }
+
+                // CORREÇÃO: Salvar username sempre em minúsculas para consistência
                 const { data, error } = await supabase
                     .from('users')
                     .insert([{
-                        username,
+                        username: username.toLowerCase(),
                         password,
                         role: 'user',
                         name: name  // Salvar nome completo
