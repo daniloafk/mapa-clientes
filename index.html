@@ -1885,7 +1885,7 @@
 
         /* Otimizar renderização dos marcadores */
         .numbered-marker {
-            will-change: transform;
+            /* Removido will-change: transform que causava bug com rotação */
             backface-visibility: hidden;
             -webkit-backface-visibility: hidden;
         }
@@ -3234,13 +3234,9 @@
             // Detectar mobile
             const isMobile = window.innerWidth <= 768;
 
-            // Usar Canvas Renderer para melhor performance (especialmente em mobile)
-            const renderer = L.canvas({ padding: 0.5 });
-
             state.map = L.map('map', {
                 zoomControl: false,
-                preferCanvas: true,  // Força uso de Canvas ao invés de SVG
-                renderer: renderer,
+                preferCanvas: false,  // Usar SVG para compatibilidade com rotação
                 // Otimizações para mobile
                 tap: true,
                 tapTolerance: 15,
