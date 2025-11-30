@@ -2090,6 +2090,9 @@
                     >
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button id="testApiKeyBtn" style="background: #3b82f6; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        🧪 Testar
+                    </button>
                     <button id="saveApiKeyBtn" style="flex: 1; background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                         💾 Salvar
                     </button>
@@ -5675,6 +5678,74 @@
         // Close Settings Panel
         document.getElementById('closeSettingsBtn').addEventListener('click', () => {
             document.getElementById('settingsPanel').classList.remove('active');
+        });
+
+        // Test API Key
+        document.getElementById('testApiKeyBtn').addEventListener('click', async () => {
+            const apiKey = document.getElementById('googleMapsApiKey').value.trim();
+            const statusEl = document.getElementById('apiKeyStatus');
+            const testBtn = document.getElementById('testApiKeyBtn');
+
+            if (!apiKey) {
+                statusEl.textContent = '⚠️ Por favor, insira uma API Key primeiro.';
+                statusEl.style.background = '#fee2e2';
+                statusEl.style.color = '#991b1b';
+                statusEl.style.display = 'block';
+                setTimeout(() => statusEl.style.display = 'none', 3000);
+                return;
+            }
+
+            // Desabilitar botão enquanto testa
+            testBtn.disabled = true;
+            testBtn.textContent = '🧪 Testando...';
+
+            statusEl.textContent = '⏳ Testando conexão com Google Maps API...';
+            statusEl.style.background = '#dbeafe';
+            statusEl.style.color = '#1e40af';
+            statusEl.style.display = 'block';
+
+            try {
+                // Fazer requisição de teste (São Paulo -> Rio de Janeiro)
+                const testUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=-23.5505,-46.6333&destination=-22.9068,-43.1729&mode=driving&key=${apiKey}`;
+
+                const response = await fetch(testUrl);
+                const data = await response.json();
+
+                if (data.status === 'OK') {
+                    statusEl.textContent = '✅ API Key VÁLIDA! Google Maps está funcionando perfeitamente.';
+                    statusEl.style.background = '#d1fae5';
+                    statusEl.style.color = '#065f46';
+                    showToast('API Key válida e funcionando!', 'success');
+                } else if (data.status === 'REQUEST_DENIED') {
+                    statusEl.innerHTML = `❌ API Key INVÁLIDA ou sem permissão.<br><small>Erro: ${data.error_message || 'Verifique se ativou a Directions API'}</small>`;
+                    statusEl.style.background = '#fee2e2';
+                    statusEl.style.color = '#991b1b';
+                    showToast('API Key inválida!', 'error');
+                } else if (data.status === 'OVER_QUERY_LIMIT') {
+                    statusEl.textContent = '⚠️ Limite de requisições excedido. Aguarde ou aumente o limite.';
+                    statusEl.style.background = '#fef3c7';
+                    statusEl.style.color = '#92400e';
+                } else {
+                    statusEl.innerHTML = `⚠️ Erro ao testar: ${data.status}<br><small>${data.error_message || ''}</small>`;
+                    statusEl.style.background = '#fee2e2';
+                    statusEl.style.color = '#991b1b';
+                }
+
+            } catch (error) {
+                statusEl.textContent = `❌ Erro de conexão: ${error.message}`;
+                statusEl.style.background = '#fee2e2';
+                statusEl.style.color = '#991b1b';
+                console.error('Erro ao testar API Key:', error);
+            }
+
+            // Restaurar botão
+            testBtn.disabled = false;
+            testBtn.textContent = '🧪 Testar';
+
+            // Manter mensagem visível por mais tempo
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 10000); // 10 segundos
         });
 
         // Save API Key (salva no Supabase para todos os usuários)
