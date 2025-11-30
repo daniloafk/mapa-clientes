@@ -3248,7 +3248,7 @@
                 // Manter animações suaves para melhor experiência
                 zoomAnimation: true,
                 fadeAnimation: true,
-                markerZoomAnimation: true,
+                markerZoomAnimation: false,  // Desabilitado para evitar bug com rotação
                 // Configurações de zoom
                 zoomSnap: 1,
                 zoomDelta: 1,
@@ -4161,15 +4161,6 @@
                         ? stop.packages.join(', ')
                         : `${stop.packages.slice(0, isMobile ? 5 : 10).join(', ')}... (+${stop.packages.length - (isMobile ? 5 : 10)})`)
                     : stop.spxTn || '-';
-
-                // Calcular distância da localização atual até esta parada
-                let distanceInfo = '';
-                if (state.currentLocationMarker) {
-                    const currentPos = state.currentLocationMarker.getLatLng();
-                    const distKm = calculateDistance(currentPos.lat, currentPos.lng, stop.latitude, stop.longitude);
-                    const estTime = calculateEstimatedTime(distKm);
-                    distanceInfo = `<p style="margin: 4px 0; padding: 6px; background: #eff6ff; border-radius: 4px; font-size: ${isMobile ? '11px' : '12px'};"><strong>🚗 Distância:</strong> ${formatDistance(distKm)} · <strong>⏱️</strong> ${estTime}</p>`;
-                }
 
                 const popupContent = isMobile ? `
                     <div class="popup-content" style="max-width: 250px;">
